@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
-from engine.celery_app import mock_simulate
+from engine.celery_app import run_swarm
 
 app = FastAPI()
 
@@ -18,13 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class PostPayload(BaseModel):
-    post: str
+class ABPayload(BaseModel):
+    postA: str
+    postB: str
 
 @app.post("/simulate")
-async def trigger_simulation(payload: PostPayload):
-    task = mock_simulate.delay(payload.post)
-    return {"task_id": task.id, "status": "Processing"}
+async def trigger_simulation(payload: ABPayload):
+    # Trigger two independent celery tasks for A/B testing
+    run_swarm.delay("TrackA", payload.postA)
+    run_swarm.delay("TrackB", payload.postB)
+    return {"status": "A/B Simulation Started"}
 
 @app.get("/stream")
 async def stream_simulation():
