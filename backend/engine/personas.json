@@ -1,0 +1,142 @@
+[
+  {
+    "id": "dcce41b6-5ed0-4c50-83ca-86aeedac0b56",
+    "name": "User_100",
+    "bias": "Casual Observer",
+    "demographic": "Boomer",
+    "vibe": "Funny"
+  },
+  {
+    "id": "a89e032e-4a60-4c82-a0d5-2da714ecd810",
+    "name": "User_101",
+    "bias": "Casual Observer",
+    "demographic": "Gen Z",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "040239e0-c716-43c9-90c2-fafba751907a",
+    "name": "User_102",
+    "bias": "Casual Observer",
+    "demographic": "Boomer",
+    "vibe": "Critical"
+  },
+  {
+    "id": "8a6c1356-7fa5-47c1-b3ca-0e9772c5190a",
+    "name": "User_103",
+    "bias": "Casual Observer",
+    "demographic": "Gen X",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "a250163b-dd84-4097-a1d7-1f54ed6cfc9d",
+    "name": "User_104",
+    "bias": "Super-fan",
+    "demographic": "Gen X",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "115e7ff5-a1ea-4d3a-8c06-6a8695af3959",
+    "name": "User_105",
+    "bias": "Super-fan",
+    "demographic": "Millennial",
+    "vibe": "Supportive"
+  },
+  {
+    "id": "48067dd5-3743-477c-a222-24feae0abcba",
+    "name": "User_106",
+    "bias": "Hater",
+    "demographic": "Boomer",
+    "vibe": "Critical"
+  },
+  {
+    "id": "19ff288f-5ab8-4864-9b75-9ba3cc1fb9fa",
+    "name": "User_107",
+    "bias": "Investor",
+    "demographic": "Gen X",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "599170ca-3c98-4e70-9463-80ceeb90895c",
+    "name": "User_108",
+    "bias": "Activist",
+    "demographic": "Millennial",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "f398c0be-9c4b-43d9-a300-e6f95cbb9ab2",
+    "name": "User_109",
+    "bias": "Activist",
+    "demographic": "Boomer",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "e4ee4fef-cc22-4457-b15a-5fe60bfdbc70",
+    "name": "User_110",
+    "bias": "Hater",
+    "demographic": "Gen X",
+    "vibe": "Funny"
+  },
+  {
+    "id": "e54b80aa-3073-4fbc-bb91-9e1287afd830",
+    "name": "User_111",
+    "bias": "Casual Observer",
+    "demographic": "Millennial",
+    "vibe": "Supportive"
+  },
+  {
+    "id": "30664081-faac-42c4-9a90-8f7702246912",
+    "name": "User_112",
+    "bias": "Hater",
+    "demographic": "Millennial",
+    "vibe": "Aggressive"
+  },
+  {
+    "id": "214629c7-a5d4-4f85-a10e-93874191551f",
+    "name": "User_113",
+    "bias": "Super-fan",
+    "demographic": "Gen Z",
+    "vibe": "Neutral"
+  },
+  {
+    "id": "35e22a64-55e6-42d0-8238-c59b79eba20d",
+    "name": "User_114",
+    "bias": "Hater",
+    "demographic": "Boomer",
+    "vibe": "Critical"
+  },
+  {
+    "id": "d114d3fc-2e3b-4c7e-829a-208877b24ea0",
+    "name": "User_115",
+    "bias": "Investor",
+    "demographic": "Millennial",
+    "vibe": "Funny"
+  },
+  {
+    "id": "c87da8ca-5db0-4031-aee2-254d2035a755",
+    "name": "User_116",
+    "bias": "Casual Observer",
+    "demographic": "Boomer",
+    "vibe": "Aggressive"
+  },
+  {
+    "id": "e7568a5a-1a10-479f-9bbc-3ea37d43de17",
+    "name": "User_117",
+    "bias": "Activist",
+    "demographic": "Gen Z",
+    "vibe": "Funny"
+  },
+  {
+    "id": "c33ca1a1-bea3-42fe-9a32-44c134ef4eee",
+    "name": "User_118",
+    "bias": "Investor",
+    "demographic": "Gen X",
+    "vibe": "Supportive"
+  },
+  {
+    "id": "0124ded3-00cf-4c1c-b03f-f0b44e35fe04",
+    "name": "User_119",
+    "bias": "Investor",
+    "demographic": "Gen X",
+    "vibe": "Supportive"
+  }
+]
