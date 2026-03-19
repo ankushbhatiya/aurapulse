@@ -1,0 +1,25 @@
+# Planning Files (Excluded as requested)
+PRD.md
+DESIGN_DOC.md
+IMPLEMENTATION_PLAN.md
+PHASE_1_TASKS.md
+PHASE_2_TASKS.md
+.PHASE_1_TASKS.md.un~
+
+# Backend
+backend/venv/
+backend/__pycache__/
+*.pyc
+
+# Frontend
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/build/
+
+# Environment
+.env
+
+# OS Files
+.DS_Store
+Thumbs.db
