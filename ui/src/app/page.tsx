@@ -25,6 +25,7 @@ export default function Home() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [showIngestDialog, setShowIngestDialog] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
   const [ingestText, setIngestText] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -38,6 +39,18 @@ export default function Home() {
   // 1. Initial Mount: Manage Session & Load Draft
   useEffect(() => {
     setMounted(true);
+
+    // Connectivity Polling
+    const checkHealth = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/health");
+        setIsConnected(res.ok);
+      } catch (e) {
+        setIsConnected(false);
+      }
+    };
+    const healthInterval = setInterval(checkHealth, 5000);
+    checkHealth();
     
     // Initialize or retrieve Session ID
     let currentSessionId = localStorage.getItem("aurapulse_session_id");
@@ -84,7 +97,10 @@ export default function Home() {
         console.error("Error parsing SSE data", e);
       }
     };
-    return () => eventSource.close();
+    return () => {
+      eventSource.close();
+      clearInterval(healthInterval);
+    };
   }, []);
 
   // 2. Auto-trigger report when simulation finishes
@@ -343,6 +359,12 @@ export default function Home() {
            >
              {theme === "dark" ? <Sun className="h-5 w-5 text-pulse" /> : <Moon className="h-5 w-5 text-primary" />}
            </button>
+           <div className={`hidden md:flex items-center gap-3 glass-panel px-4 py-2 border-border/50 ${isConnected ? 'bg-aquamarine/5 border-aquamarine/20' : 'bg-neon-red/5 border-neon-red/20'}`}>
+              <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-aquamarine animate-pulse shadow-[0_0_8px_rgba(100,255,218,0.5)]' : 'bg-neon-red shadow-[0_0_8px_rgba(255,0,85,0.5)]'}`} />
+              <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isConnected ? 'text-aquamarine' : 'text-neon-red'}`}>
+                {isConnected ? 'OASIS Link Active' : 'System Offline'}
+              </span>
+           </div>
         </div>
       </header>
       

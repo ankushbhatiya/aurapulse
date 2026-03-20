@@ -31,8 +31,8 @@ pkill -f celery || true
 
 # 3. Start Backend & Worker
 echo "⚙️  Starting FastAPI Backend & Celery Worker..."
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 > ~/.aura/backend.log 2>&1 &
-celery -A engine.celery_app worker --loglevel=info -P solo > ~/.aura/celery.log 2>&1 &
+./venv/bin/uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 > ~/.aura/backend.log 2>&1 &
+./venv/bin/celery -A engine.celery_app worker --loglevel=info -P solo > ~/.aura/celery.log 2>&1 &
 
 # 4. Setup & Start UI
 echo "🎨 Starting Frontend UI..."

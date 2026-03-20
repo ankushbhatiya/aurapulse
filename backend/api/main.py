@@ -85,6 +85,10 @@ async def stop_simulation(sim_id: str):
     r_std.hset(f"sim:{sim_id}:meta", "status", "Stopped")
     return {"status": "Simulation stopped", "id": sim_id}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "timestamp": time.time()}
+
 @app.get("/simulations")
 async def list_simulations():
     sim_ids = r_std.lrange("simulations:list", 0, 19) # Last 20
