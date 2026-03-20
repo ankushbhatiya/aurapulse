@@ -191,6 +191,7 @@ export default function Home() {
       ]);
       const dataA = await resA.json();
       const dataB = await resB.json();
+      console.log(`Loaded history for ${sim.id}:`, { dataA, dataB });
       setFeedA(Array.isArray(dataA) ? dataA.reverse() : []);
       setFeedB(Array.isArray(dataB) ? dataB.reverse() : []);
 
@@ -199,8 +200,16 @@ export default function Home() {
         fetch(`http://localhost:8000/report/${sim.id}/TrackA`),
         fetch(`http://localhost:8000/report/${sim.id}/TrackB`)
       ]);
-      if (repResA.ok) setReportA(await repResA.json());
-      if (repResB.ok) setReportB(await repResB.json());
+      if (repResA.ok) {
+        const ra = await repResA.json();
+        console.log("Loaded report A:", ra);
+        setReportA(ra);
+      }
+      if (repResB.ok) {
+        const rb = await repResB.json();
+        console.log("Loaded report B:", rb);
+        setReportB(rb);
+      }
     } catch (e) {
       console.error("Failed to load past sim history", e);
     }

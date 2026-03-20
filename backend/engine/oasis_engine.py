@@ -85,6 +85,9 @@ class OasisEngine:
                     "total_expected": total_expected
                 }
                 
+                # Stream result to UI via global stream
+                await redis_client.publish('sim_stream', json.dumps(message))
+                
                 # Also log to a persistent list for this specific track/simulation
                 log_key = f"logs:{simulation_id}:{track_id}"
                 print(f"DEBUG: [{track_id}] Pushing comment to Redis key: {log_key}")
