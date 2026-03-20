@@ -71,7 +71,7 @@ class OasisEngine:
     async def _process_agent_turn(self, redis_client, persona, target_text, context, simulation_id, track_id, turn, reply_to, total_expected):
         async with self.semaphore:
             try:
-                comment = await generate_agent_response_async(persona, target_text, context)
+                comment = await generate_agent_response_async(persona, target_text, context, sim_id=simulation_id)
                 
                 message = {
                     "simulation_id": simulation_id,

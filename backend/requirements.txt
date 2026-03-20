@@ -6,3 +6,4 @@ neo4j==5.16.0
 litellm==1.28.0
 python-dotenv==1.0.1
 sse-starlette==2.0.0
+zep-python==2.0.0
