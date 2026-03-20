@@ -3,8 +3,8 @@
 ## 🎭 Design Philosophy
 AuraPulse is not a chatbot; it is a **Societal Mirror**. Every development step must focus on the emergent behavior of the swarm. We prioritize **Grounded Authenticity** over generic AI helpfulness.
 
-### The "MiroFish" Core
-We follow the MiroFish architecture: 
+### The "" Core
+We follow the architecture: 
 1. **Knowledge (The Past):** Stored in Neo4j via GraphRAG. Agents must be grounded in facts before they speak.
 2. **Memory (The Self):** Stored in Zep Cloud. Agents must maintain a consistent personality across simulations.
 3. **Simulation (The Now):** Parallelized OASIS engine. Speed and concurrency are critical.
