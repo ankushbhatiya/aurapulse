@@ -19,6 +19,40 @@ AuraPulse is a high-stakes social media simulation sandbox inspired by the **Mir
 - **Multi-Session Persistence:** Backend-persisted drafts and simulation history, allowing multiple users or tabs to work independently.
 - **Environment Isolation:** Fully separated Development and Production environments with namespaced databases.
 
+---
+
+## 🔄 End-to-End Simulation Flow
+
+AuraPulse follows a complex but automated pipeline to deliver high-fidelity predictions:
+
+1.  **Knowledge Ingestion (GraphRAG):**
+    *   User uploads raw text (e.g., "Celeb X is a vegan but was seen at a steakhouse").
+    *   **GraphConstructor** uses an LLM to extract entities (Person, Brand) and relationships (Supports, Contradicts).
+    *   Data is stored in **Neo4j** with environment-specific namespaces.
+
+2.  **Simulation Setup:**
+    *   User inputs two different post narratives (Track A vs. Track B).
+    *   User selects the **Swarm Size** (e.g., 50 digital twin agents).
+
+3.  **The OASIS Multi-Agent Loop:**
+    *   **Orchestration:** A parallelized Celery task triggers the simulation.
+    *   **Context Retrieval:** For every post, the system queries Neo4j for relevant 2-hop brand history.
+    *   **Agent Interaction:** 
+        *   **Turn 1:** Agents react to the main post based on their persona (Hater, Fan, etc.) and long-term memory.
+        *   **Turn 2:** Agents react to *each other*, debating the post and its implications.
+    *   **Real-time Streaming:** Comments are published to Redis and streamed to the UI via **SSE**.
+
+4.  **Strategic Analysis (ReportAgent):**
+    *   Once the swarm finishes, the **ReportAgent** analyzes the full log.
+    *   It calculates **Viral Momentum**, **Brand Risk**, and **Community Drift**.
+    *   A structured JSON report is generated and stored in Redis.
+
+5.  **Analytics Visualization:**
+    *   The "God View" automatically updates with the final ROI scores and high-level risk insights.
+    *   Users can browse past simulations in the **History Sidebar** to compare strategies over time.
+
+---
+
 ## 🛠 Tech Stack
 
 ### Frontend
