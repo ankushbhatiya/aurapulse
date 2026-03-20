@@ -5,6 +5,8 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     restart: always
 
   neo4j:
@@ -14,4 +16,12 @@ services:
       - "7687:7687" # Bolt
     environment:
       - NEO4J_AUTH=neo4j/password
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
     restart: always
+
+volumes:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:

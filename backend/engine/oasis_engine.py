@@ -17,14 +17,18 @@ REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 
-# Global lock for file operations to prevent race conditions during scaling
-persona_lock = asyncio.Lock()
-
 class OasisEngine:
     def __init__(self):
         self.redis_url = REDIS_URL
         self.semaphore = None
         self.app_env = os.getenv("APP_ENV", "development")
+        self._persona_lock = None
+
+    @property
+    def persona_lock(self):
+        if self._persona_lock is None:
+            self._persona_lock = asyncio.Lock()
+        return self._persona_lock
 
     async def run_simulation(self, track_id: str, post_text: str, simulation_id: str, turns: int = 2, agent_count: int = 20):
         """
@@ -37,10 +41,10 @@ class OasisEngine:
         
         try:
             # 1. Load grounded personas with lock
-            file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personas.json")
+            file_path = os.path.expanduser("~/.aura/personas.json")
             print(f"DEBUG: [{track_id}] Loading personas from: {file_path}")
             
-            async with persona_lock:
+            async with self.persona_lock:
                 all_personas = []
                 if os.path.exists(file_path):
                     with open(file_path, "r") as f:

@@ -115,7 +115,8 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     tasks = [sem_create() for _ in range(count)]
     personas = await asyncio.gather(*tasks)
     
-    file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personas.json")
+    file_path = os.path.expanduser("~/.aura/personas.json")
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         json.dump(personas, f, indent=2)
     print(f"Ingestion complete. {count} personas saved to {file_path}")
