@@ -18,3 +18,4 @@ ui/build/
 # OS Files
 .DS_Store
 Thumbs.db
+*.log

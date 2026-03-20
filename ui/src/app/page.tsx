@@ -60,7 +60,9 @@ export default function Home() {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.total_expected) setTotalExpected(data.total_expected);
+        if (data.total_expected) {
+          setTotalExpected(prev => Math.max(prev, data.total_expected));
+        }
         
         if (data.track_id === "TrackA") {
           setFeedA((prev) => [data, ...prev].slice(0, 100));
@@ -76,15 +78,17 @@ export default function Home() {
 
   // 2. Auto-trigger report when simulation finishes
   useEffect(() => {
+    if (!isSimulating || !activeSimId || isGeneratingReport || reportA) return;
+
     const isFinishedA = feedA.length >= totalExpected && totalExpected > 0;
     const isFinishedB = feedB.length >= totalExpected && totalExpected > 0;
 
-    if (isSimulating && isFinishedA && isFinishedB && !reportA && !isGeneratingReport) {
-      console.log("Simulation finished. Auto-triggering reports...");
+    if (isFinishedA && isFinishedB) {
+      console.log(`Simulation ${activeSimId} finished (${feedA.length}/${totalExpected}). Auto-triggering reports...`);
       setIsSimulating(false);
-      fetchReports();
+      fetchReports(false);
     }
-  }, [feedA.length, feedB.length, totalExpected, isSimulating, reportA, isGeneratingReport]);
+  }, [feedA.length, feedB.length, totalExpected, isSimulating, activeSimId, isGeneratingReport, reportA]);
 
   // 3. Debounced Auto-Save to Backend
   useEffect(() => {
