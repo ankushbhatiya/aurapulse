@@ -1,6 +1,12 @@
+![AuraPulse Banner](images/banner.svg)
+
 # AuraPulse: Predictive Social Simulation Engine
 
 AuraPulse is a high-stakes social media simulation sandbox inspired by the **MiroFish** architecture. It allows talent managers and PR teams to run parallel, multi-turn AI simulations to predict audience reactions to social media posts, acting as an insurance policy against PR disasters.
+
+## 📸 Dashboard Preview
+
+![AuraPulse Dashboard](images/aura_run.png)
 
 ## 🚀 Key Features
 
