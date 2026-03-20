@@ -32,7 +32,7 @@ def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     except Exception:
         return ["General Social Media", "Trending Topics"]
 
-async def create_persona_llm(concepts: List[str]) -> Dict:
+async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
     """Uses Strategic LLM to generate a high-fidelity persona with strict JSON enforcement."""
     system_prompt = """
     You are a specialized Persona Generator. 
@@ -42,11 +42,11 @@ async def create_persona_llm(concepts: List[str]) -> Dict:
     """
     
     user_prompt = f"""
-    Generate a unique social media user persona interested in: {', '.join(concepts)}.
+    Generate a unique social media user persona (Reference ID: {unique_id}) interested in: {', '.join(concepts)}.
     
     Output this EXACT JSON structure:
     {{
-      "name": "Creative name",
+      "name": "Creative and unique name",
       "demographic": "One of: Gen Z, Millennial, Gen X, Boomer",
       "bias": "One of: Super-fan, Hater, Casual Observer, Activist, Investor, Skeptic, Troll",
       "vibe": "One of: Supportive, Critical, Funny, Aggressive, Neutral, Thoughtful, Sarcastic, Hyper",
@@ -62,7 +62,7 @@ async def create_persona_llm(concepts: List[str]) -> Dict:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.7,
+            "temperature": 0.85, # Increased for more variety
             "max_tokens": 500
         }
         if LLM_BASE_URL:
@@ -108,18 +108,30 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     
     semaphore = asyncio.Semaphore(4)
 
-    async def sem_create():
+    async def sem_create(i):
         async with semaphore:
-            return await create_persona_llm(concepts)
+            return await create_persona_llm(concepts, unique_id=i)
 
-    tasks = [sem_create() for _ in range(count)]
-    personas = await asyncio.gather(*tasks)
+    tasks = [sem_create(i) for i in range(count)]
+    raw_personas = await asyncio.gather(*tasks)
     
+    # Ensure name uniqueness
+    unique_personas = []
+    seen_names = set()
+    for p in raw_personas:
+        if p["name"] not in seen_names:
+            unique_personas.append(p)
+            seen_names.add(p["name"])
+        else:
+            # Append a random string if duplicate name
+            p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
+            unique_personas.append(p)
+
     file_path = os.path.expanduser("~/.aura/personas.json")
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
-        json.dump(personas, f, indent=2)
-    print(f"Ingestion complete. {count} personas saved to {file_path}")
+        json.dump(unique_personas, f, indent=2)
+    print(f"Ingestion complete. {len(unique_personas)} personas saved to {file_path}")
 
 if __name__ == "__main__":
     asyncio.run(generate_grounded_personas(4)) # Generate exactly 4 to test stability

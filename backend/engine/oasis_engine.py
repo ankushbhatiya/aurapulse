@@ -59,13 +59,20 @@ class OasisEngine:
                     
                     needed = agent_count - len(all_personas)
                     semaphore = asyncio.Semaphore(4)
-                    async def sem_create():
+                    async def sem_create(i):
                         async with semaphore:
-                            return await create_persona_llm(concepts)
+                            return await create_persona_llm(concepts, unique_id=i)
                     
-                    tasks = [sem_create() for _ in range(needed)]
-                    new_personas = await asyncio.gather(*tasks)
-                    all_personas.extend(new_personas)
+                    tasks = [sem_create(i) for i in range(needed)]
+                    new_batch = await asyncio.gather(*tasks)
+                    
+                    # Uniqueness check before adding
+                    seen_names = {p["name"] for p in all_personas}
+                    for p in new_batch:
+                        if p["name"] in seen_names:
+                            p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
+                        all_personas.append(p)
+                        seen_names.add(p["name"])
                     
                     with open(file_path, "w") as f:
                         json.dump(all_personas, f, indent=2)
