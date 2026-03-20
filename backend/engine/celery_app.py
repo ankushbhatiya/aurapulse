@@ -3,7 +3,10 @@ import asyncio
 from celery import Celery
 from engine.oasis_engine import OasisEngine
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
+
 celery_app = Celery("aurapulse", broker=REDIS_URL, backend=REDIS_URL)
 
 @celery_app.task(bind=True)

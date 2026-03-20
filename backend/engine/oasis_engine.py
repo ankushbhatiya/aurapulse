@@ -6,13 +6,15 @@ import asyncio
 from typing import List, Dict
 from engine.agent import generate_agent_response_async
 from graph.retriever import get_context_for_post
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 
 class OasisEngine:
     def __init__(self):
         self.redis_url = REDIS_URL
         self.semaphore = None
+        self.app_env = os.getenv("APP_ENV", "development")
 
     async def run_simulation(self, track_id: str, post_text: str, simulation_id: str, turns: int = 2, agent_count: int = 20):
         """
@@ -22,13 +24,13 @@ class OasisEngine:
             self.semaphore = asyncio.Semaphore(5)
 
         redis_client = aioredis.from_url(self.redis_url)
-        
+
         try:
             # 1. Load grounded personas
             file_path = os.path.join(os.path.dirname(__file__), "personas.json")
             with open(file_path, "r") as f:
                 all_personas = json.load(f)
-            
+
             # Use only the requested number of agents
             if agent_count > len(all_personas):
                 print(f"Warning: Requested {agent_count} agents but only {len(all_personas)} available.")
@@ -36,8 +38,8 @@ class OasisEngine:
             else:
                 personas = random.sample(all_personas, agent_count)
 
-            # 2. Get Knowledge Graph Context
-            context = get_context_for_post(post_text)
+            # 2. Get Knowledge Graph Context (passing app_env as tenant_id)
+            context = get_context_for_post(post_text, client_id=self.app_env)
             
             # Track simulation history
             simulation_history = []

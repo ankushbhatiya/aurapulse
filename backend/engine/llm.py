@@ -4,7 +4,7 @@ from litellm import completion
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(".env.development")
 
 # Use local LLM if base_url is provided
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")

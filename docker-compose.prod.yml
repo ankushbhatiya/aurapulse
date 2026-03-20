@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # The bases (redis, neo4j) are inherited from docker-compose.yml
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.production
+    depends_on:
+      - redis
+      - neo4j
+    restart: always
+
+  worker:
+    build: ./backend
+    command: celery -A engine.celery_app worker --loglevel=info -P solo
+    env_file:
+      - .env.production
+    depends_on:
+      - redis
+      - neo4j
+    restart: always
+
+  ui:
+    build: ./ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: always

@@ -7,16 +7,19 @@ from litellm import completion
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(".env.development")
 
 # Configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/minimax/minimax-m2.5")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1/")
 
 class ReportAgent:
     def __init__(self):
         self.redis_client = redis.Redis.from_url(REDIS_URL)
+        self.app_env = os.getenv("APP_ENV", "development")
 
     def generate_report(self, track_id: str, simulation_data: List[Dict]) -> Dict:
         """

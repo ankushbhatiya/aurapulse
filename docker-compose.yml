@@ -1,13 +1,17 @@
 version: '3.8'
+
 services:
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    restart: always
+
   neo4j:
     image: neo4j:5-community
     ports:
-      - "7474:7474" # HTTP Dashboard
-      - "7687:7687" # Bolt connection
+      - "7474:7474" # Dashboard
+      - "7687:7687" # Bolt
     environment:
       - NEO4J_AUTH=neo4j/password
+    restart: always

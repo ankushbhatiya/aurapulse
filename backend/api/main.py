@@ -12,6 +12,9 @@ import redis.asyncio as aioredis
 import redis
 from engine.celery_app import run_dual_swarm, celery_app
 from engine.report_agent import ReportAgent
+from dotenv import load_dotenv
+
+load_dotenv(".env.development")
 
 app = FastAPI()
 
@@ -24,7 +27,9 @@ app.add_middleware(
 )
 
 # Standard redis client
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 r_std = redis.Redis.from_url(REDIS_URL)
 
 class ABPayload(BaseModel):

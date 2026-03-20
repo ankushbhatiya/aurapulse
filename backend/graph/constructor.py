@@ -6,7 +6,7 @@ from neo4j import GraphDatabase
 from litellm import completion
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(".env.development")
 
 # Configuration
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
