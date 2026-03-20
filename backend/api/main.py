@@ -12,6 +12,7 @@ import redis.asyncio as aioredis
 import redis
 from engine.celery_app import run_dual_swarm, celery_app
 from engine.report_agent import ReportAgent
+from graph.constructor import GraphConstructor
 from dotenv import load_dotenv
 
 load_dotenv(".env.development")
@@ -42,6 +43,10 @@ class DraftPayload(BaseModel):
     postA: str
     postB: str
     agent_count: int
+
+class IngestPayload(BaseModel):
+    text: str
+    client_id: Optional[str] = "development"
 
 @app.post("/simulate")
 async def trigger_simulation(payload: ABPayload):
@@ -169,3 +174,17 @@ async def delete_draft(session_id: str):
     draft_key = f"draft:{session_id}"
     r_std.delete(draft_key)
     return {"status": "Draft deleted", "session_id": session_id}
+
+# --- KNOWLEDGE INGESTION ---
+
+@app.post("/ingest")
+async def ingest_knowledge(payload: IngestPayload):
+    try:
+        constructor = GraphConstructor()
+        # Ensure we use development tenant if in dev, etc.
+        tenant = payload.client_id or os.getenv("APP_ENV", "development")
+        constructor.process_seed_text(payload.text, client_id=tenant)
+        constructor.close()
+        return {"status": "Ingestion complete", "tenant": tenant}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

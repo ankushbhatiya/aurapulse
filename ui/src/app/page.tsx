@@ -1,7 +1,15 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from "next-themes";
-import { Moon, Sun, Zap, Play, FileText, BarChart3, AlertTriangle, RotateCcw, History, Square, Users } from "lucide-react";
+import { Moon, Sun, Zap, Play, FileText, BarChart3, AlertTriangle, RotateCcw, History, Square, Users, Database, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function Home() {
   const [feedA, setFeedA] = useState<any[]>([]);
@@ -15,6 +23,8 @@ export default function Home() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestText, setIngestText] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
@@ -212,6 +222,26 @@ export default function Home() {
     }
   };
 
+  const handleIngest = async () => {
+    if (!ingestText) return;
+    setIsIngesting(true);
+    try {
+      const res = await fetch("http://localhost:8000/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: ingestText }),
+      });
+      if (res.ok) {
+        setIngestText("");
+        alert("Knowledge Graph Updated successfully.");
+      }
+    } catch (e) {
+      console.error("Ingestion failed", e);
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
   const clearSession = async () => {
     if (isSimulating) stopSimulation();
     setFeedA([]);
@@ -247,6 +277,40 @@ export default function Home() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+           {/* Ingestion Trigger */}
+           <Dialog>
+             <DialogTrigger asChild>
+               <button className="p-2.5 rounded-xl bg-secondary hover:bg-aquamarine/10 hover:text-aquamarine transition-all border border-border shadow-sm flex items-center gap-2">
+                 <Database className="h-5 w-5" />
+                 <span className="text-xs font-bold uppercase hidden md:inline">Grounding</span>
+               </button>
+             </DialogTrigger>
+             <DialogContent className="sm:max-w-[600px] bg-zinc-950 border-zinc-800 text-white">
+               <DialogHeader>
+                 <DialogTitle className="text-pulse font-black tracking-widest uppercase">Knowledge Ingestion</DialogTitle>
+                 <DialogDescription className="text-zinc-500 font-mono text-xs uppercase opacity-70">
+                   Inject raw text into the GraphRAG knowledge base to ground your agent swarm.
+                 </DialogDescription>
+               </DialogHeader>
+               <div className="py-6 space-y-4">
+                 <textarea 
+                   className="w-full h-64 bg-black border border-zinc-800 rounded-xl p-4 text-sm focus:border-pulse/50 transition-all outline-none font-mono"
+                   placeholder="Paste brand guidelines, news articles, or past transcripts here..."
+                   value={ingestText}
+                   onChange={(e) => setIngestText(e.target.value)}
+                 />
+                 <button 
+                   onClick={handleIngest}
+                   disabled={isIngesting || !ingestText}
+                   className="w-full bg-pulse text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-30"
+                 >
+                   {isIngesting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Database className="h-5 w-5" />}
+                   {isIngesting ? "EXTRACTING ENTITIES..." : "PROCESS & INGEST"}
+                 </button>
+               </div>
+             </DialogContent>
+           </Dialog>
+
            <button 
              onClick={() => setShowHistory(!showHistory)}
              className={`p-2.5 rounded-xl transition-all border border-border shadow-sm flex items-center gap-2 ${showHistory ? 'bg-pulse text-background' : 'bg-secondary hover:bg-secondary/80'}`}
