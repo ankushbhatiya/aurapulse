@@ -5,7 +5,8 @@ from litellm import completion, token_counter
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv(".env.development")
+load_dotenv(os.path.expanduser("~/.aura/aura.cfg")) if os.path.exists(os.path.expanduser("~/.aura/aura.cfg")) else load_dotenv("/app/.aura/aura.cfg")
+print(f"DEBUG: OPENAI_API_KEY is {'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'}")
 
 # Redis for Circuit Breaker
 REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")

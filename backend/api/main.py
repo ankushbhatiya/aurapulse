@@ -15,13 +15,15 @@ from engine.report_agent import ReportAgent
 from graph.constructor import GraphConstructor
 from dotenv import load_dotenv
 
-load_dotenv(".env.development")
+# Load global config first
+CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

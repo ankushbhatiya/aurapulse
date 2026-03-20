@@ -24,6 +24,7 @@ export default function Home() {
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [showIngestDialog, setShowIngestDialog] = useState(false);
   const [ingestText, setIngestText] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -233,6 +234,8 @@ export default function Home() {
       });
       if (res.ok) {
         setIngestText("");
+        setShowIngestDialog(false);
+        // Maybe a subtle toast notification later, but alert for now
         alert("Knowledge Graph Updated successfully.");
       }
     } catch (e) {
@@ -278,13 +281,13 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
            {/* Ingestion Trigger */}
-           <Dialog>
-             <DialogTrigger asChild>
-               <button className="p-2.5 rounded-xl bg-secondary hover:bg-aquamarine/10 hover:text-aquamarine transition-all border border-border shadow-sm flex items-center gap-2">
+           <Dialog open={showIngestDialog} onOpenChange={setShowIngestDialog}>
+             <DialogTrigger render={
+               <button className="p-2.5 rounded-xl bg-secondary hover:bg-aquamarine/10 hover:text-aquamarine transition-all border border-border shadow-sm flex items-center gap-2 cursor-pointer">
                  <Database className="h-5 w-5" />
                  <span className="text-xs font-bold uppercase hidden md:inline">Grounding</span>
                </button>
-             </DialogTrigger>
+             } />
              <DialogContent className="sm:max-w-[600px] bg-zinc-950 border-zinc-800 text-white">
                <DialogHeader>
                  <DialogTitle className="text-pulse font-black tracking-widest uppercase">Knowledge Ingestion</DialogTitle>

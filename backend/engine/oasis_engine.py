@@ -6,6 +6,12 @@ import asyncio
 from typing import List, Dict
 from engine.agent import generate_agent_response_async
 from graph.retriever import get_context_for_post
+from dotenv import load_dotenv
+
+# Load global config first
+CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
+
 REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
@@ -13,6 +19,7 @@ REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 class OasisEngine:
     def __init__(self):
         self.redis_url = REDIS_URL
+        print(f"DEBUG: OasisEngine initialized with REDIS_URL: {self.redis_url}")
         self.semaphore = None
         self.app_env = os.getenv("APP_ENV", "development")
 
@@ -24,30 +31,24 @@ class OasisEngine:
             self.semaphore = asyncio.Semaphore(5)
 
         redis_client = aioredis.from_url(self.redis_url)
-
+        
         try:
             # 1. Load grounded personas
             file_path = os.path.join(os.path.dirname(__file__), "personas.json")
             with open(file_path, "r") as f:
                 all_personas = json.load(f)
-
-            # Use only the requested number of agents
+            
             if agent_count > len(all_personas):
-                print(f"Warning: Requested {agent_count} agents but only {len(all_personas)} available.")
                 personas = all_personas
             else:
                 personas = random.sample(all_personas, agent_count)
 
-            # 2. Get Knowledge Graph Context (passing app_env as tenant_id)
+            # 2. Get Knowledge Graph Context
             context = get_context_for_post(post_text, client_id=self.app_env)
             
-            # Track simulation history
             simulation_history = []
 
             for turn in range(1, turns + 1):
-                print(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
-                
-                # Shuffle active personas for this turn
                 active_personas = random.sample(personas, len(personas))
                 
                 tasks = []
@@ -81,12 +82,13 @@ class OasisEngine:
                     "bias": persona["bias"],
                     "comment": comment,
                     "reply_to": reply_to["persona_name"] if reply_to else None,
-                    "total_expected": total_expected # Pass to UI for progress bar
+                    "total_expected": total_expected
                 }
                 
-                await redis_client.publish('sim_stream', json.dumps(message))
-                await redis_client.rpush(f"logs:{simulation_id}:{track_id}", json.dumps(message))
-                
+                # Also log to a persistent list for this specific track/simulation
+                log_key = f"logs:{simulation_id}:{track_id}"
+                print(f"DEBUG: [{track_id}] Pushing comment to Redis key: {log_key}")
+                await redis_client.rpush(log_key, json.dumps(message))
                 return message
             except Exception as e:
                 print(f"Error processing agent {persona['name']}: {e}")

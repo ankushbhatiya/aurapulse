@@ -7,7 +7,7 @@ from litellm import completion
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv(".env.development")
+load_dotenv(os.path.expanduser("~/.aura/aura.cfg")) if os.path.exists(os.path.expanduser("~/.aura/aura.cfg")) else load_dotenv("/app/.aura/aura.cfg")
 
 # Configuration
 REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")

@@ -8,66 +8,69 @@ AuraPulse is a high-stakes social media simulation sandbox inspired by the **Mir
 
 ![AuraPulse Dashboard](images/aura_run.png)
 
-## 🚀 Key Features
+---
 
-- **The "God View" Dashboard:** A real-time, three-column layout for simulation setup, live feed, and predictive analytics.
-- **MiroFish OASIS Engine:** A sophisticated multi-agent framework where "Digital Twin" personas interact with each other in multi-turn simulations.
-- **Parallel A/B Testing:** Compare two post versions (Track A vs. Track B) simultaneously in a single simulation run.
-- **GraphRAG-Powered Grounding:** Automated Neo4j pipeline that extracts brand guidelines into a knowledge graph.
-- **Knowledge Ingestion UI:** Directly upload new guidelines, news, or transcripts from the dashboard to update the graph in real-time.
-- **ReportAgent Analytics:** LLM-powered PR analyst that synthesizes thousands of comments into actionable ROI and Risk reports.
-- **Multi-Session Persistence:** Backend-persisted drafts and simulation history, allowing multiple users or tabs to work independently.
-- **Environment Isolation:** Fully separated Development and Production environments with namespaced databases.
+## 🏗 System Architecture
+
+AuraPulse uses a distributed, event-driven architecture designed for high-concurrency multi-agent simulations.
+
+### High-Level Component Map
+
+```mermaid
+graph TD
+    UI[Next.js Frontend] -->|REST| API[FastAPI Backend]
+    UI -->|SSE| Redis[Redis Pub/Sub]
+    API -->|Tasks| Celery[Celery Workers]
+    Celery -->|Knowledge| Neo4j[Neo4j GraphRAG]
+    Celery -->|Memory| Zep[Zep Cloud]
+    Celery -->|Publish| Redis
+    Celery -->|Logs| Redis
+```
+
+### Roles & Responsibilities
+
+| System | Role | Technology |
+| :--- | :--- | :--- |
+| **Frontend** | The "God View" Dashboard | Next.js 15, Tailwind, Shadcn |
+| **Orchestrator** | Task Distribution & API | FastAPI, Celery |
+| **Nervous System** | Real-time Streaming & State | Redis (Pub/Sub & Hashes) |
+| **Knowledge (Brain)** | Brand Guidelines & Facts | Neo4j (GraphRAG) |
+| **Memory (Self)** | Agent Consistency/History | Zep Cloud |
+| **Inference** | AI Persona Logic | LiteLLM (Local Minimax m2.5) |
 
 ---
 
-## 🔄 End-to-End Simulation Flow
+## 🔄 End-to-End Data Flow
 
-AuraPulse follows a complex but automated pipeline to deliver high-fidelity predictions:
+### Step 1: Grounding (Knowledge Ingestion)
+*   **Action:** User pastes raw text into the "Grounding" modal.
+*   **Flow:** `UI` -> `FastAPI` -> `GraphConstructor` -> `LLM` (Ontology) -> `Neo4j`.
+*   **Outcome:** A connected graph of celebrity brand values, past actions, and rules.
 
-1.  **Knowledge Ingestion (GraphRAG):**
-    *   User uploads raw text (e.g., "Celeb X is a vegan but was seen at a steakhouse").
-    *   **GraphConstructor** uses an LLM to extract entities (Person, Brand) and relationships (Supports, Contradicts).
-    *   Data is stored in **Neo4j** with environment-specific namespaces.
+### Step 2: Simulation Initialization
+*   **Action:** User inputs Post A/B and hits "Initialize."
+*   **Flow:** `UI` -> `FastAPI` -> `Celery` (run_dual_swarm).
+*   **Outcome:** Two parallel simulation tracks are queued. The UI switches to "Execution" state.
 
-2.  **Simulation Setup:**
-    *   User inputs two different post narratives (Track A vs. Track B).
-    *   User selects the **Swarm Size** (e.g., 50 digital twin agents).
+### Step 3: The OASIS Multi-Agent Loop
+For every agent in the swarm (Parallelized per track):
+1.  **Context Retrieval:** Query `Neo4j` for 2-hop facts related to the post content.
+2.  **Memory Fetch:** Query `Zep Cloud` for the agent's unique past behavior.
+3.  **Inference:** Call `LLM` with [Persona + Grounding + Memory].
+4.  **Broadcast:** 
+    *   Publish comment to `Redis sim_stream` (for real-time UI update).
+    *   Push comment to `Redis logs:{sim_id}` (for permanent history).
+    *   Save comment to `Zep Cloud` (for future consistency).
 
-3.  **The OASIS Multi-Agent Loop:**
-    *   **Orchestration:** A parallelized Celery task triggers the simulation.
-    *   **Context Retrieval:** For every post, the system queries Neo4j for relevant 2-hop brand history.
-    *   **Agent Interaction:** 
-        *   **Turn 1:** Agents react to the main post based on their persona (Hater, Fan, etc.) and long-term memory.
-        *   **Turn 2:** Agents react to *each other*, debating the post and its implications.
-    *   **Real-time Streaming:** Comments are published to Redis and streamed to the UI via **SSE**.
+### Step 4: Strategic Synthesis (ReportAgent)
+*   **Action:** Simulation completes (all agents responded).
+*   **Flow:** `UI` -> `FastAPI` -> `ReportAgent` -> `LLM` (Analyst).
+*   **Outcome:** The full log is summarized into JSON: Viral Momentum, Brand Risk, and Community Drift.
 
-4.  **Strategic Analysis (ReportAgent):**
-    *   Once the swarm finishes, the **ReportAgent** analyzes the full log.
-    *   It calculates **Viral Momentum**, **Brand Risk**, and **Community Drift**.
-    *   A structured JSON report is generated and stored in Redis.
-
-5.  **Analytics Visualization:**
-    *   The "God View" automatically updates with the final ROI scores and high-level risk insights.
-    *   Users can browse past simulations in the **History Sidebar** to compare strategies over time.
-
----
-
-## 🛠 Tech Stack
-
-### Frontend
-- **Framework:** Next.js 15+ (App Router)
-- **Styling:** Tailwind CSS (Custom Dark/Light Themes)
-- **UI Components:** Shadcn/UI & Lucide Icons
-- **Real-time:** Server-Sent Events (SSE)
-
-### Backend
-- **API:** FastAPI (Python 3.9+)
-- **Task Queue:** Celery with Redis (Optimized with `solo` pool for async stability)
-- **LLM Orchestration:** LiteLLM (Supporting local servers like Minimax-m2.5)
-- **Database:** Neo4j (Knowledge Graph)
-- **Cache/State:** Redis (Drafts, History, Reports)
-- **Long-Term Memory:** Zep Cloud Integration
+### Step 5: Persistence
+*   **Action:** User refreshes page or opens a new tab.
+*   **Flow:** `UI` -> `FastAPI` -> `Redis` (HGETALL draft/history).
+*   **Outcome:** The state is fully reconstructed from the backend database.
 
 ---
 
@@ -75,30 +78,36 @@ AuraPulse follows a complex but automated pipeline to deliver high-fidelity pred
 
 AuraPulse uses separate configuration files to isolate development and production data.
 
-### 1. 🛠 Day-to-Day Development
-Run only the infrastructure in Docker, and run the app logic locally for hot-reloading. Data is stored in **Redis DB 1**.
+### 1. 🛠 Day-to-Day Development (Recommended)
+Run infrastructure in Docker, and app logic locally. Data is stored in **Redis DB 1**.
 
-1.  **Configure:** Ensure `.env.development` has `REDIS_DB=1` and `APP_ENV=development`.
-2.  **Start DBs:** `docker-compose up -d`
-3.  **Run Backend:** `cd backend && source venv/bin/activate && export PYTHONPATH=$PYTHONPATH:. && uvicorn api.main:app --reload --port 8000`
-4.  **Run Worker:** `cd backend && source venv/bin/activate && export PYTHONPATH=$PYTHONPATH:. && celery -A engine.celery_app worker --loglevel=info -P solo`
-5.  **Run Frontend:** `cd ui && npm run dev`
+1.  **Launch everything:** `./dev.sh`
+2.  **Access:** [http://localhost:3000](http://localhost:3000)
+3.  **Logs:** `~/.aura/backend.log` and `~/.aura/celery.log`.
 
 ### 2. 🚀 Production/Deployment Mode
 Run the entire containerized stack. Data is stored in **Redis DB 0**.
 
-1.  **Configure:** Ensure `.env.production` has `REDIS_DB=0` and `APP_ENV=production`.
-2.  **Start the Full Stack:**
-    ```bash
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-    ```
+1.  **Start Stack:** `docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d`
 
 ---
 
-## 🏗 Setup & Prerequisites
-- Docker & Docker Compose
-- Python 3.9+ (for local dev)
-- Node.js 20+ (for local dev)
+## 🧪 Testing
+
+AuraPulse includes a comprehensive end-to-end test suite to verify the entire pipeline.
+
+### 1. Automated (Recommended)
+Run the entire stack, execute tests, and clean up with one command:
+```bash
+./test.sh
+```
+
+### 2. Manual
+If the development environment is already running:
+```bash
+cd backend && source venv/bin/activate
+pytest ../tests/test_e2e.py
+```
 
 ## 📜 License
 Internal Use Only.
