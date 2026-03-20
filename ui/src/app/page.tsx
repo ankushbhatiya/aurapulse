@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from "next-themes";
+import { minidenticon } from 'minidenticons';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
 import { Moon, Sun, Zap, Play, FileText, BarChart3, AlertTriangle, RotateCcw, History, Square, Users, Database, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -30,7 +32,7 @@ export default function Home() {
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
   // Ref to track if initial load is done to prevent overwriting with defaults
@@ -322,7 +324,7 @@ export default function Home() {
            {/* Ingestion Trigger */}
            <Dialog open={showIngestDialog} onOpenChange={setShowIngestDialog}>
              <DialogTrigger render={
-               <button className="p-2.5 rounded-xl bg-secondary hover:bg-aquamarine/10 hover:text-aquamarine transition-all border border-border shadow-sm flex items-center gap-2 cursor-pointer">
+               <button className="p-2.5 rounded-xl bg-secondary hover:bg-purple-track/10 hover:text-purple-track transition-all border border-border shadow-sm flex items-center gap-2 cursor-pointer">
                  <Database className="h-5 w-5" />
                  <span className="text-xs font-bold uppercase hidden md:inline">Grounding</span>
                </button>
@@ -373,9 +375,9 @@ export default function Home() {
            >
              {theme === "dark" ? <Sun className="h-5 w-5 text-pulse" /> : <Moon className="h-5 w-5 text-primary" />}
            </button>
-           <div className={`hidden md:flex items-center gap-3 glass-panel px-4 py-2 border-border/50 ${isConnected ? 'bg-aquamarine/5 border-aquamarine/20' : 'bg-neon-red/5 border-neon-red/20'}`}>
-              <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-aquamarine animate-pulse shadow-[0_0_8px_rgba(100,255,218,0.5)]' : 'bg-neon-red shadow-[0_0_8px_rgba(255,0,85,0.5)]'}`} />
-              <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isConnected ? 'text-aquamarine' : 'text-neon-red'}`}>
+           <div className={`hidden md:flex items-center gap-3 glass-panel px-4 py-2 border-border/50 ${isConnected ? 'bg-purple-track/5 border-purple-track/20' : 'bg-neon-red/5 border-neon-red/20'}`}>
+              <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-purple-track animate-pulse shadow-[0_0_8px_rgba(100,255,218,0.5)]' : 'bg-neon-red shadow-[0_0_8px_rgba(255,0,85,0.5)]'}`} />
+              <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isConnected ? 'text-purple-track' : 'text-neon-red'}`}>
                 {isConnected ? 'OASIS Link Active' : 'System Offline'}
               </span>
            </div>
@@ -464,8 +466,8 @@ export default function Home() {
         <section className="lg:col-span-5 flex flex-col h-[75vh]">
           <div className="glass-panel flex-grow flex flex-col overflow-hidden border-pulse/10 shadow-2xl">
             <div className="p-4 border-b border-border flex justify-between items-center bg-muted/20">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-aquamarine flex items-center gap-2">
-                <span className="h-4 w-1 bg-aquamarine rounded-full" />
+              <h2 className="text-sm font-bold uppercase tracking-widest text-purple-track flex items-center gap-2">
+                <span className="h-4 w-1 bg-purple-track rounded-full" />
                 2. Real-Time Swarm
               </h2>
               {isSimulating && <span className="text-[10px] font-mono text-pulse animate-pulse">STREAMING_ACTIVE</span>}
@@ -482,6 +484,11 @@ export default function Home() {
                     {feedA.map((msg, i) => (
                       <div key={i} className="animate-in fade-in slide-in-from-left-2 duration-300">
                         <div className="flex items-center gap-2 mb-1">
+                           <img 
+                             src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
+                             alt={msg.persona_name} 
+                             className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
+                           />
                            <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
                            {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
                         </div>
@@ -501,10 +508,15 @@ export default function Home() {
                     {feedB.map((msg, i) => (
                       <div key={i} className="animate-in fade-in slide-in-from-right-2 duration-300">
                         <div className="flex items-center gap-2 mb-1">
+                           <img 
+                             src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
+                             alt={msg.persona_name} 
+                             className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
+                           />
                            <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
                            {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
                         </div>
-                        <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-aquamarine/20">{msg.comment}</p>
+                        <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-purple-track/20">{msg.comment}</p>
                       </div>
                     ))}
                  </div>
@@ -560,9 +572,9 @@ export default function Home() {
                        <span className="text-[8px] font-black text-pulse/60 uppercase block mb-1">Track A Score</span>
                        <div className="text-2xl font-black text-pulse">{reportA?.confidence_score}%</div>
                     </div>
-                    <div className="p-3 bg-aquamarine/5 border border-aquamarine/20 rounded-xl">
-                       <span className="text-[8px] font-black text-aquamarine/60 uppercase block mb-1">Track B Score</span>
-                       <div className="text-2xl font-black text-aquamarine">{reportB?.confidence_score}%</div>
+                    <div className="p-3 bg-purple-track/5 border border-purple-track/20 rounded-xl">
+                       <span className="text-[8px] font-black text-purple-track/60 uppercase block mb-1">Track B Score</span>
+                       <div className="text-2xl font-black text-purple-track">{reportB?.confidence_score}%</div>
                     </div>
                  </div>
                  <div className="p-4 bg-neon-red/5 border border-neon-red/20 rounded-xl">
@@ -573,9 +585,9 @@ export default function Home() {
                  </div>
                  <div className="space-y-6">
                     {[
-                      { label: "Viral Momentum", valA: reportA?.viral_momentum, valB: reportB?.viral_momentum, colorA: "bg-pulse" },
-                      { label: "Controversy Risk", valA: reportA?.controversy_risk, valB: reportB?.controversy_risk, colorA: "bg-neon-red" },
-                      { label: "Community Drift", valA: reportA?.community_drift, valB: reportB?.community_drift, colorA: "bg-aquamarine" }
+                      { label: "Viral Momentum", valA: reportA?.viral_momentum, valB: reportB?.viral_momentum },
+                      { label: "Controversy Risk", valA: reportA?.controversy_risk, valB: reportB?.controversy_risk },
+                      { label: "Community Drift", valA: reportA?.community_drift, valB: reportB?.community_drift }
                     ].map((item) => (
                       <div key={item.label} className="space-y-3">
                         <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">
@@ -589,18 +601,18 @@ export default function Home() {
                             <span className="text-[8px] font-mono text-pulse">{item.valA}%</span>
                           </div>
                           <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div style={{ width: `${item.valA || 0}%` }} className={`h-full ${item.colorA} shadow-[0_0_8px_rgba(0,246,255,0.2)]`} />
+                            <div style={{ width: `${item.valA || 0}%` }} className={`h-full bg-pulse shadow-[0_0_8px_rgba(0,246,255,0.2)]`} />
                           </div>
                         </div>
 
                         {/* Track B Bar */}
                         <div className="space-y-1">
                           <div className="flex justify-between items-center px-1">
-                            <span className="text-[7px] font-bold text-aquamarine/80 uppercase">Track B</span>
-                            <span className="text-[8px] font-mono text-aquamarine">{item.valB}%</span>
+                            <span className="text-[7px] font-bold text-purple-track/80 uppercase">Track B</span>
+                            <span className="text-[8px] font-mono text-purple-track">{item.valB}%</span>
                           </div>
                           <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div style={{ width: `${item.valB || 0}%` }} className={`h-full bg-aquamarine shadow-[0_0_8px_rgba(100,255,218,0.2)]`} />
+                            <div style={{ width: `${item.valB || 0}%` }} className={`h-full bg-purple-track shadow-[0_0_8px_rgba(100,255,218,0.2)]`} />
                           </div>
                         </div>
                       </div>
@@ -642,11 +654,11 @@ export default function Home() {
                     </div>
                     <div className="space-y-2 mb-4">
                       <p className="text-xs text-zinc-400 line-clamp-1 border-l border-pulse/20 pl-2 italic">A: {sim.postA}</p>
-                      <p className="text-xs text-zinc-400 line-clamp-1 border-l border-aquamarine/20 pl-2 italic">B: {sim.postB}</p>
+                      <p className="text-xs text-zinc-400 line-clamp-1 border-l border-purple-track/20 pl-2 italic">B: {sim.postB}</p>
                     </div>
                     <div className="flex justify-between items-center">
                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${sim.status === 'Stopped' ? 'bg-neon-red/10 text-neon-red' : 'bg-aquamarine/10 text-aquamarine'}`}>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${sim.status === 'Stopped' ? 'bg-neon-red/10 text-neon-red' : 'bg-purple-track/10 text-purple-track'}`}>
                             {sim.status === 'Stopped' ? 'Interrupted' : 'Deployed'}
                           </span>
                           <span className="text-[10px] font-mono opacity-40">{sim.agent_count} AGENTS</span>
