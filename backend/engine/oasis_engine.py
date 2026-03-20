@@ -9,7 +9,8 @@ from graph.retriever import get_context_for_post
 from dotenv import load_dotenv
 
 # Load global config first
-CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
+print(f"DEBUG: OasisEngine loading config from {CONFIG_PATH}, exists: {os.path.exists(CONFIG_PATH)}")
 load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -48,10 +49,19 @@ class OasisEngine:
                 # Dynamic Swarm Scaling
                 if agent_count > len(all_personas):
                     print(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
+                    await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas..."}))
                     from engine.personas import get_grounding_concepts, create_persona_llm
                     concepts = get_grounding_concepts(client_id=self.app_env)
-                    while len(all_personas) < agent_count:
-                        all_personas.append(create_persona_llm(concepts))
+                    
+                    needed = agent_count - len(all_personas)
+                    semaphore = asyncio.Semaphore(4)
+                    async def sem_create():
+                        async with semaphore:
+                            return await create_persona_llm(concepts)
+                    
+                    tasks = [sem_create() for _ in range(needed)]
+                    new_personas = await asyncio.gather(*tasks)
+                    all_personas.extend(new_personas)
                     
                     with open(file_path, "w") as f:
                         json.dump(all_personas, f, indent=2)
@@ -63,6 +73,8 @@ class OasisEngine:
             context = get_context_for_post(post_text, client_id=self.app_env)
             
             simulation_history = []
+            
+            await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Running Swarm..."}))
 
             for turn in range(1, turns + 1):
                 print(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")

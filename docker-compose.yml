@@ -13,5 +13,5 @@ services:
       - "7474:7474" # Dashboard
       - "7687:7687" # Bolt
     environment:
-      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=neo4j/password
     restart: always

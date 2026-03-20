@@ -14,8 +14,21 @@ echo "🚀 Launching development stack..."
 DEV_PID=$!
 
 # 2. Wait for services to be ready
-echo "⏳ Waiting for services to stabilize (30s)..."
-sleep 30
+echo "⏳ Waiting for services to stabilize..."
+MAX_RETRIES=30
+RETRY_DELAY=2
+
+for i in $(seq 1 $MAX_RETRIES); do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        echo "✅ Backend is ready after $((i * RETRY_DELAY))s"
+        break
+    fi
+    if [ $i -eq $MAX_RETRIES ]; then
+        echo "❌ Backend failed to start after $((MAX_RETRIES * RETRY_DELAY))s"
+        exit 1
+    fi
+    sleep $RETRY_DELAY
+done
 
 # 3. Run Tests
 echo "🏃 Running Pytest suite..."

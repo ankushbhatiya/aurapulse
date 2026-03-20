@@ -23,6 +23,7 @@ export default function Home() {
   const [agentCount, setAgentCount] = useState(20);
   const [totalExpected, setTotalExpected] = useState(40);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationStatusMsg, setSimulationStatusMsg] = useState<string | null>(null);
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
@@ -38,7 +39,7 @@ export default function Home() {
   // Ref to track if initial load is done to prevent overwriting with defaults
   const isInitialLoadDone = useRef(false);
 
-  // 1. Initial Mount: Manage Session & Load Draft
+  // 1. Initial Mount & Health Check
   useEffect(() => {
     setMounted(true);
 
@@ -86,6 +87,12 @@ export default function Home() {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        if (data.type === "status") {
+          setSimulationStatusMsg(data.message);
+          return;
+        }
+
         if (data.total_expected) {
           setTotalExpected(prev => Math.max(prev, data.total_expected));
         }
@@ -156,6 +163,7 @@ export default function Home() {
   const handleSimulate = async () => {
     if (!postA || !postB) return;
     setIsSimulating(true);
+    setSimulationStatusMsg("Initializing Swarm Engine...");
     setFeedA([]);
     setFeedB([]);
     setReportA(null);
@@ -173,6 +181,7 @@ export default function Home() {
     } catch (e) {
       console.error("Simulate failed", e);
       setIsSimulating(false);
+      setSimulationStatusMsg(null);
     }
   };
 
@@ -181,6 +190,7 @@ export default function Home() {
     try {
       await fetch(`http://localhost:8000/stop/${activeSimId}`, { method: "POST" });
       setIsSimulating(false);
+      setSimulationStatusMsg("Simulation Interrupted.");
       fetchHistory();
     } catch (e) {
       console.error("Stop failed", e);
@@ -237,6 +247,7 @@ export default function Home() {
     if (!activeSimId) return;
     console.log(`fetchReports triggered: forceRefresh=${forceRefresh}, activeSimId=${activeSimId}`);
     setIsGeneratingReport(true);
+    setSimulationStatusMsg("Generating Analysis...");
     try {
       const urlA = `http://localhost:8000/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
       const urlB = `http://localhost:8000/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
@@ -261,6 +272,7 @@ export default function Home() {
       console.error("Report fetch failed", e);
     } finally {
       setIsGeneratingReport(false);
+      setSimulationStatusMsg(null);
     }
   };
 
@@ -416,12 +428,14 @@ export default function Home() {
                     </label>
                     <span className="text-xs font-mono text-pulse font-bold">{agentCount} Agents</span>
                  </div>
-                 <input 
-                   type="range" min="5" max="100" step="5"
-                   value={agentCount}
-                   onChange={(e) => setAgentCount(parseInt(e.target.value))}
-                   className="w-full accent-pulse h-1 bg-background rounded-full appearance-none cursor-pointer"
-                 />
+                 <div className="px-2">
+                   <input 
+                     type="range" min="5" max="500" step="5"
+                     value={agentCount}
+                     onChange={(e) => setAgentCount(parseInt(e.target.value))}
+                     className="w-full accent-pulse h-1 bg-background rounded-full appearance-none cursor-pointer py-4"
+                   />
+                 </div>
                  <div className="flex justify-between mt-2 opacity-30 text-[8px] font-bold uppercase tracking-tighter">
                     <span>Sparse</span>
                     <span>Dense Swarm</span>
@@ -455,10 +469,10 @@ export default function Home() {
              <div>
                 <h3 className="text-[10px] font-bold uppercase text-muted-foreground mb-1 tracking-widest opacity-60">Engine Capacity</h3>
                 <p className="text-xs text-muted-foreground/80 font-medium">
-                  {isSimulating ? "High Concurrency Execution" : "Awaiting Configuration"}
+                  {simulationStatusMsg || (isSimulating ? "High Concurrency Execution" : "Awaiting Configuration")}
                 </p>
              </div>
-             <div className={`h-2 w-2 rounded-full ${isSimulating ? 'bg-pulse animate-pulse' : 'bg-zinc-700'}`} />
+             <div className={`h-2 w-2 rounded-full ${isSimulating || isGeneratingReport ? 'bg-pulse animate-pulse' : 'bg-zinc-700'}`} />
           </div>
         </section>
         

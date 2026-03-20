@@ -7,9 +7,25 @@ set -e
 
 echo "🚀 Starting AuraPulse Development Environment..."
 
+# Load global config
+CONFIG_PATH="$HOME/.aura/aura.cfg"
+if [ -f "$CONFIG_PATH" ]; then
+    echo "📜 Loading config from $CONFIG_PATH"
+    # Export variables for docker-compose and local processes
+    set -a
+    source "$CONFIG_PATH"
+    set +a
+else
+    echo "⚠️  Global config not found at $CONFIG_PATH"
+fi
+
 # 1. Start Infrastructure (Redis, Neo4j)
 echo "📦 Spinning up Docker infrastructure..."
-docker-compose up -d
+if [ -f "$CONFIG_PATH" ]; then
+    docker-compose --env-file "$CONFIG_PATH" up -d
+else
+    docker-compose up -d
+fi
 
 # 2. Setup Backend
 echo "🐍 Preparing Backend..."

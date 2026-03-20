@@ -2,9 +2,10 @@ import json
 import uuid
 import random
 import os
+import asyncio
 from typing import List, Dict
 from neo4j import GraphDatabase
-from litellm import completion
+from litellm import completion, acompletion
 from engine.llm import STRATEGIC_LLM, LLM_BASE_URL
 from dotenv import load_dotenv
 
@@ -31,7 +32,7 @@ def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     except Exception:
         return ["General Social Media", "Trending Topics"]
 
-def create_persona_llm(concepts: List[str]) -> Dict:
+async def create_persona_llm(concepts: List[str]) -> Dict:
     """Uses Strategic LLM to generate a high-fidelity persona with strict JSON enforcement."""
     system_prompt = """
     You are a specialized Persona Generator. 
@@ -55,16 +56,19 @@ def create_persona_llm(concepts: List[str]) -> Dict:
     """
     
     try:
-        response = completion(
-            model=STRATEGIC_LLM,
-            api_base=LLM_BASE_URL,
-            messages=[
+        completion_args = {
+            "model": STRATEGIC_LLM,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            max_tokens=500
-        )
+            "temperature": 0.7,
+            "max_tokens": 500
+        }
+        if LLM_BASE_URL:
+            completion_args["api_base"] = LLM_BASE_URL
+
+        response = await acompletion(**completion_args)
         content = response.choices[0].message.content.strip()
         
         # Robust JSON cleaning
@@ -98,14 +102,18 @@ def create_persona_llm(concepts: List[str]) -> Dict:
             "description": "A fallback user created due to system load."
         }
 
-def generate_grounded_personas(count=100, client_id="CLIENT_A"):
+async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     concepts = get_grounding_concepts(client_id)
-    print(f"Generating {count} high-fidelity personas using {STRATEGIC_LLM}...")
+    print(f"Generating {count} high-fidelity personas using {STRATEGIC_LLM} in parallel (limit=4)...")
     
-    personas = []
-    for i in range(count):
-        print(f"  - Generating persona {i+1}/{count}...")
-        personas.append(create_persona_llm(concepts))
+    semaphore = asyncio.Semaphore(4)
+
+    async def sem_create():
+        async with semaphore:
+            return await create_persona_llm(concepts)
+
+    tasks = [sem_create() for _ in range(count)]
+    personas = await asyncio.gather(*tasks)
     
     file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personas.json")
     with open(file_path, "w") as f:
@@ -113,4 +121,4 @@ def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     print(f"Ingestion complete. {count} personas saved to {file_path}")
 
 if __name__ == "__main__":
-    generate_grounded_personas(4) # Generate exactly 4 to test stability
+    asyncio.run(generate_grounded_personas(4)) # Generate exactly 4 to test stability
