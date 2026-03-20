@@ -5,8 +5,9 @@ from litellm import completion, token_counter
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/.aura/aura.cfg")) if os.path.exists(os.path.expanduser("~/.aura/aura.cfg")) else load_dotenv("/app/.aura/aura.cfg")
-print(f"DEBUG: OPENAI_API_KEY is {'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'}")
+# Load global config first
+CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 # Redis for Circuit Breaker
 REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -14,36 +15,33 @@ REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 r = redis.Redis.from_url(REDIS_URL)
 
-# LLM Config
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+# Dual LLM Config Defaults
+STRATEGIC_LLM = os.getenv("STRATEGIC_LLM_MODEL", "gpt-4o-mini")
+AGENT_LLM = os.getenv("AGENT_LLM_MODEL", "gpt-4o-mini")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 
 def is_circuit_broken(sim_id: str) -> bool:
-    """Checks if the token limit for a simulation has been exceeded."""
-    limit = 10000 # 10k token limit per sim
+    limit = 10000 
     usage = int(r.get(f"tokens:{sim_id}") or 0)
     return usage > limit
 
-def generate_response(prompt: str, sim_id: str = "global") -> str:
-    # 1. Check Circuit Breaker
+def generate_response(prompt: str, model: str, sim_id: str = "global") -> str:
+    """Generic wrapper for LLM calls with token counting and circuit breaking."""
     if is_circuit_broken(sim_id):
         return "CIRCUIT_BREAKER_TRIPPED"
 
     for attempt in range(3):
         try:
-            # 2. Count Tokens
             messages = [{"role": "user", "content": prompt}]
-            # Fallback to gpt-4o-mini for counting if local model name not recognized
-            model_for_counting = "gpt-4o-mini"
-            tokens = token_counter(model=model_for_counting, messages=messages)
+            # Count tokens using a generic model name if needed
+            tokens = token_counter(model="gpt-4o-mini", messages=messages)
             r.incrby(f"tokens:{sim_id}", tokens)
 
-            # 3. Call LLM
             completion_args = {
-                "model": LLM_MODEL,
+                "model": model,
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 500
+                "max_tokens": 1000 if "minimax" in model else 500
             }
             if LLM_BASE_URL:
                 completion_args["api_base"] = LLM_BASE_URL
@@ -51,9 +49,8 @@ def generate_response(prompt: str, sim_id: str = "global") -> str:
             response = completion(**completion_args)
             return response.choices[0].message.content.strip()
         except RateLimitError:
-            wait = 2 ** attempt
-            time.sleep(wait)
+            time.sleep(2 ** attempt)
         except Exception as e:
-            print(f"LLM Error: {e}")
+            print(f"LLM Error ({model}): {e}")
             break
-    return "Error: Agent silent."
+    return "Error: LLM silent."

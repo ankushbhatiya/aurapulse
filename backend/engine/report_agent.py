@@ -1,24 +1,19 @@
 import os
 import json
-import redis
 import time
+from engine.llm import STRATEGIC_LLM, LLM_BASE_URL, r
 from typing import List, Dict
 from litellm import completion
 from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-load_dotenv(os.path.expanduser("~/.aura/aura.cfg")) if os.path.exists(os.path.expanduser("~/.aura/aura.cfg")) else load_dotenv("/app/.aura/aura.cfg")
-
-# Configuration
-REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = os.getenv("REDIS_DB", "0")
-REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
-LLM_MODEL = os.getenv("LLM_MODEL", "openai/minimax/minimax-m2.5")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1/")
+# Load global config
+CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 class ReportAgent:
     def __init__(self):
-        self.redis_client = redis.Redis.from_url(REDIS_URL)
+        self.redis_client = r
         self.app_env = os.getenv("APP_ENV", "development")
 
     def generate_report(self, track_id: str, simulation_data: List[Dict]) -> Dict:
@@ -78,7 +73,7 @@ class ReportAgent:
         for attempt in range(3):
             try:
                 response = completion(
-                    model=LLM_MODEL,
+                    model=STRATEGIC_LLM,
                     api_base=LLM_BASE_URL,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -124,3 +119,12 @@ class ReportAgent:
                         "sentiment_summary": "Analysis failed after 3 attempts."
                     }
         return {"error": "Unknown failure"}
+
+if __name__ == "__main__":
+    # Test with mock data
+    agent = ReportAgent()
+    mock_data = [
+        {"persona_name": "User_1", "bias": "Hater", "comment": "This is terrible, I hate it."},
+        {"persona_name": "User_2", "bias": "Super-fan", "comment": "Amazing! Love the sustainability."}
+    ]
+    print(agent.generate_report("TestTrack", mock_data))

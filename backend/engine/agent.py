@@ -1,18 +1,13 @@
-from engine.llm import generate_response
+from engine.llm import STRATEGIC_LLM, AGENT_LLM, LLM_BASE_URL, is_circuit_broken, r
 import os
 import time
 import asyncio
 from litellm import completion, acompletion, token_counter
-from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
-# Absolute path to global config
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
+# Load global config
+CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
 load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
-
-# LLM Config
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 
 # Optional Zep Integration
 try:
@@ -77,7 +72,6 @@ async def generate_agent_response_async(persona: dict, post_text: str, graph_con
     """
     
     # 3. Check circuit breaker
-    from engine.llm import is_circuit_broken, r
     if is_circuit_broken(sim_id):
         return "CIRCUIT_BREAKER_TRIPPED"
 
@@ -89,12 +83,12 @@ async def generate_agent_response_async(persona: dict, post_text: str, graph_con
 
     for attempt in range(3):
         try:
-            # Count Tokens
+            # Count Tokens (using AGENT_LLM)
             tokens = token_counter(model="gpt-4o-mini", messages=messages)
             r.incrby(f"tokens:{sim_id}", tokens)
 
             completion_args = {
-                "model": LLM_MODEL,
+                "model": AGENT_LLM,
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 500
@@ -109,17 +103,11 @@ async def generate_agent_response_async(persona: dict, post_text: str, graph_con
             
             await add_agent_memory(persona["id"], comment)
             break
-        except RateLimitError:
-            await asyncio.sleep(2 ** attempt)
         except Exception as e:
-            print(f"LLM Error: {e}")
-            break
+            print(f"Agent LLM Error ({persona['name']}): {e}")
+            await asyncio.sleep(2 ** attempt)
             
     return comment
 
 def generate_agent_response(persona: dict, post_text: str, graph_context: str, sim_id: str = "global") -> str:
     return asyncio.run(generate_agent_response_async(persona, post_text, graph_context, sim_id))
-
-if __name__ == "__main__":
-    test_persona = {"id": "test_user_1", "name": "Kyle", "demographic": "Gen Z", "bias": "Hater", "vibe": "Aggressive"}
-    print(generate_agent_response(test_persona, "I love my new steakhouse!", "Regarding Veganism: Advocates heavily."))
