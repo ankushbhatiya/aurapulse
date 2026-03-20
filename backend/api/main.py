@@ -85,6 +85,11 @@ async def list_simulations():
             results.append({k.decode("utf-8"): v.decode("utf-8") for k, v in meta.items()})
     return results
 
+@app.get("/history/{sim_id}/{track_id}")
+async def get_history(sim_id: str, track_id: str):
+    logs = r_std.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
+    return [json.loads(l.decode("utf-8")) for l in logs]
+
 @app.get("/report/{sim_id}/{track_id}")
 async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
     report_key = f"report:{sim_id}:{track_id}"
