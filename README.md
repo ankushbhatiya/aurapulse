@@ -1,51 +1,36 @@
 # AuraPulse: Predictive Social Simulation Engine
 
-AuraPulse is a high-stakes social media simulation sandbox designed for talent managers and PR teams. It allows users to run parallel AI-driven simulations to predict audience reactions to social media posts before they go live, acting as an "insurance policy" against PR disasters.
+AuraPulse is a high-stakes social media simulation sandbox inspired by the **MiroFish** architecture. It allows talent managers and PR teams to run parallel, multi-turn AI simulations to predict audience reactions to social media posts, acting as an insurance policy against PR disasters.
 
 ## 🚀 Key Features
 
-- **The "God View" Live Sandbox:** A real-time, three-column dashboard to manage simulations.
-- **Parallel A/B Testing:** Compare two different post versions (Track A vs. Track B) simultaneously.
-- **GraphRAG-Powered Context:** Uses Neo4j and Knowledge Graphs to ground AI agents in a celebrity's specific brand history and guidelines.
-- **Digital Twin Swarms:** Simulate 1,000+ distinct agent personas (fans, haters, activists, etc.) reacting in real-time.
-- **Predictive Analytics:** Get actionable insights, including Sentiment Delta, Brand Risk, and Marginal Utility Scores.
+- **The "God View" Dashboard:** A real-time, three-column layout for simulation setup, live feed, and predictive analytics.
+- **MiroFish OASIS Engine:** A sophisticated multi-agent framework where "Digital Twin" personas interact with each other in multi-turn simulations.
+- **Parallel A/B Testing:** Compare two post versions (Track A vs. Track B) simultaneously in a single simulation run.
+- **GraphRAG-Powered Grounding:** Automated Neo4j pipeline that extracts brand guidelines into a knowledge graph to ground AI agent behavior.
+- **ReportAgent Analytics:** LLM-powered PR analyst that synthesizes thousands of comments into actionable ROI and Risk reports.
+- **Multi-Session Persistence:** Backend-persisted drafts and simulation history, allowing multiple users or tabs to work independently without data loss.
 
 ## 🛠 Tech Stack
 
 ### Frontend
 - **Framework:** Next.js 15+ (App Router)
-- **Styling:** Tailwind CSS
-- **UI Components:** Shadcn/UI
+- **Styling:** Tailwind CSS (Custom Dark/Light Themes)
+- **UI Components:** Shadcn/UI & Lucide Icons
 - **Real-time:** Server-Sent Events (SSE)
 
 ### Backend
-- **API:** FastAPI (Python 3.10+)
-- **Task Queue:** Celery with Redis
-- **LLM Orchestration:** LiteLLM (supporting GPT-4o-mini, Llama-3, etc.)
-- **Memory:** Zep Cloud / VectorDB for agent consistency
-
-### Database & Knowledge Graph
-- **Graph Database:** Neo4j (GraphRAG)
-- **Cache/Pub-Sub:** Redis
-
-## 🏗 Project Structure
-
-```text
-/aurapulse
-  ├── backend/          # FastAPI & Celery Logic
-  │   ├── api/          # REST Endpoints
-  │   ├── engine/       # Simulation & Agent Swarm Logic
-  │   └── graph/        # Neo4j & Retrieval Layer
-  ├── ui/               # Next.js Frontend
-  ├── docker-compose.yml # Infrastructure (Redis, Neo4j)
-  └── .env              # Environment Variables
-```
+- **API:** FastAPI (Python 3.9+)
+- **Task Queue:** Celery with Redis (Optimized with `solo` pool for async stability)
+- **LLM Orchestration:** LiteLLM (Supporting local servers like Minimax-m2.5)
+- **Database:** Neo4j (Knowledge Graph)
+- **Cache/State:** Redis (Drafts, History, Reports)
 
 ## 🚦 Getting Started
 
 ### Prerequisites
 - Docker & Docker Compose
-- Python 3.10+
+- Python 3.9+
 - Node.js 18+
 
 ### Setup
@@ -75,6 +60,7 @@ AuraPulse is a high-stakes social media simulation sandbox designed for talent m
    ```bash
    cd backend
    source venv/bin/activate
+   export PYTHONPATH=$PYTHONPATH:.
    uvicorn api.main:app --reload --port 8000
    ```
 
@@ -82,7 +68,8 @@ AuraPulse is a high-stakes social media simulation sandbox designed for talent m
    ```bash
    cd backend
    source venv/bin/activate
-   celery -A engine.celery_app worker --loglevel=info
+   export PYTHONPATH=$PYTHONPATH:.
+   celery -A engine.celery_app worker --loglevel=info -P solo
    ```
 
 3. **Start Frontend (Terminal 3):**

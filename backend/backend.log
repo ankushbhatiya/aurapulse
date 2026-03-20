@@ -1,0 +1,11 @@
+INFO:     Will watch for changes in these directories: ['/Users/ankush/workspace/aurapulse/backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [52491] using StatReload
+/Users/ankush/workspace/aurapulse/backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [52493]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:56128 - "GET /stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56130 - "GET /report/88cc8bb8/TrackA?force_refresh=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56131 - "GET /report/88cc8bb8/TrackB?force_refresh=true HTTP/1.1" 200 OK
