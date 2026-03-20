@@ -233,14 +233,28 @@ export default function Home() {
 
   const fetchReports = async (forceRefresh = false) => {
     if (!activeSimId) return;
+    console.log(`fetchReports triggered: forceRefresh=${forceRefresh}, activeSimId=${activeSimId}`);
     setIsGeneratingReport(true);
     try {
+      const urlA = `http://localhost:8000/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
+      const urlB = `http://localhost:8000/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
+      console.log(`Fetching reports from: ${urlA} and ${urlB}`);
+      
       const [resA, resB] = await Promise.all([
-        fetch(`http://localhost:8000/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`),
-        fetch(`http://localhost:8000/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`)
+        fetch(urlA),
+        fetch(urlB)
       ]);
-      setReportA(await resA.json());
-      setReportB(await resB.json());
+
+      if (resA.ok) {
+        const dataA = await resA.json();
+        console.log("Report A Data:", dataA);
+        setReportA(dataA);
+      }
+      if (resB.ok) {
+        const dataB = await resB.json();
+        console.log("Report B Data:", dataB);
+        setReportB(dataB);
+      }
     } catch (e) {
       console.error("Report fetch failed", e);
     } finally {

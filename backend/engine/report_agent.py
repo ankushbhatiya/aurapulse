@@ -80,7 +80,8 @@ class ReportAgent:
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=0.1,
-                    max_tokens=2000
+                    max_tokens=2000,
+                    response_format=None # Ensure no automatic JSON mode is triggered
                 )
                 content = response.choices[0].message.content.strip()
                 

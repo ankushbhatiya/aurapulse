@@ -16,10 +16,12 @@ REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
 
+# Global lock for file operations to prevent race conditions during scaling
+persona_lock = asyncio.Lock()
+
 class OasisEngine:
     def __init__(self):
         self.redis_url = REDIS_URL
-        print(f"DEBUG: OasisEngine initialized with REDIS_URL: {self.redis_url}")
         self.semaphore = None
         self.app_env = os.getenv("APP_ENV", "development")
 
@@ -33,15 +35,29 @@ class OasisEngine:
         redis_client = aioredis.from_url(self.redis_url)
         
         try:
-            # 1. Load grounded personas
-            file_path = os.path.join(os.path.dirname(__file__), "personas.json")
-            with open(file_path, "r") as f:
-                all_personas = json.load(f)
+            # 1. Load grounded personas with lock
+            file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personas.json")
+            print(f"DEBUG: [{track_id}] Loading personas from: {file_path}")
             
-            if agent_count > len(all_personas):
-                personas = all_personas
-            else:
+            async with persona_lock:
+                all_personas = []
+                if os.path.exists(file_path):
+                    with open(file_path, "r") as f:
+                        all_personas = json.load(f)
+                
+                # Dynamic Swarm Scaling
+                if agent_count > len(all_personas):
+                    print(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
+                    from engine.personas import get_grounding_concepts, create_persona_llm
+                    concepts = get_grounding_concepts(client_id=self.app_env)
+                    while len(all_personas) < agent_count:
+                        all_personas.append(create_persona_llm(concepts))
+                    
+                    with open(file_path, "w") as f:
+                        json.dump(all_personas, f, indent=2)
+
                 personas = random.sample(all_personas, agent_count)
+                print(f"DEBUG: [{track_id}] Swarm size finalized at: {len(personas)} agents.")
 
             # 2. Get Knowledge Graph Context
             context = get_context_for_post(post_text, client_id=self.app_env)
@@ -49,6 +65,8 @@ class OasisEngine:
             simulation_history = []
 
             for turn in range(1, turns + 1):
+                print(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
+                
                 active_personas = random.sample(personas, len(personas))
                 
                 tasks = []
@@ -85,14 +103,13 @@ class OasisEngine:
                     "total_expected": total_expected
                 }
                 
-                # Stream result to UI via global stream
                 await redis_client.publish('sim_stream', json.dumps(message))
-                
-                # Also log to a persistent list for this specific track/simulation
-                log_key = f"logs:{simulation_id}:{track_id}"
-                print(f"DEBUG: [{track_id}] Pushing comment to Redis key: {log_key}")
-                await redis_client.rpush(log_key, json.dumps(message))
+                await redis_client.rpush(f"logs:{simulation_id}:{track_id}", json.dumps(message))
                 return message
             except Exception as e:
                 print(f"Error processing agent {persona['name']}: {e}")
                 return None
+
+if __name__ == "__main__":
+    engine = OasisEngine()
+    asyncio.run(engine.run_simulation("TestTrack", "Async test!", "manual_test"))

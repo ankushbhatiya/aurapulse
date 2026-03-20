@@ -21,9 +21,23 @@ AGENT_LLM = os.getenv("AGENT_LLM_MODEL", "gpt-4o-mini")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 
 def is_circuit_broken(sim_id: str) -> bool:
-    limit = 10000 
+    # Disable circuit breaker for local testing
+    base_url = os.getenv("LLM_BASE_URL", "")
+    is_local = "localhost" in base_url or "host.docker.internal" in base_url or not base_url
+    
+    limit = 50000 
     usage = int(r.get(f"tokens:{sim_id}") or 0)
-    return usage > limit
+    
+    if usage > limit and not is_local:
+        print(f"!!! CIRCUIT BREAKER TRIPPED !!! Sim: {sim_id} | Usage: {usage} | Limit: {limit} | BaseURL: {base_url} | LocalBypass: {is_local}")
+        return True
+    
+    if usage > limit and is_local:
+        # Just a warning for local, don't actually break
+        print(f"--- CIRCUIT BREAKER WARNING (BYPASSED) --- Sim: {sim_id} | Usage: {usage} | BaseURL: {base_url}")
+        return False
+
+    return False
 
 def generate_response(prompt: str, model: str, sim_id: str = "global") -> str:
     """Generic wrapper for LLM calls with token counting and circuit breaking."""
