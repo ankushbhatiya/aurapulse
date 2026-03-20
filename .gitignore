@@ -1,10 +1,5 @@
 # Planning Files (Excluded as requested)
-PRD.md
-DESIGN_DOC.md
-IMPLEMENTATION_PLAN.md
-PHASE_1_TASKS.md
-PHASE_2_TASKS.md
-.PHASE_1_TASKS.md.un~
+internal_plans/
 
 # Backend
 backend/venv/
