@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-AUTH = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD", "password"))
+AUTH = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD"))
 
 def setup_constraints():
     with GraphDatabase.driver(URI, auth=AUTH) as driver:

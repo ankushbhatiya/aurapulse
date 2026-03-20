@@ -9,13 +9,13 @@ from engine.llm import STRATEGIC_LLM, LLM_BASE_URL
 from dotenv import load_dotenv
 
 # Load global config first
-CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
 load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 # Configuration
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     try:

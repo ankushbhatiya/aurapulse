@@ -6,7 +6,7 @@ from litellm.exceptions import RateLimitError
 from dotenv import load_dotenv
 
 # Load global config first
-CONFIG_PATH = "/Users/ankush/.aura/aura.cfg"
+CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
 load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 # Redis for Circuit Breaker
