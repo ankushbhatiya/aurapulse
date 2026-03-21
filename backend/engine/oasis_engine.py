@@ -35,7 +35,7 @@ class OasisEngine:
         Orchestrates a multi-turn OASIS simulation in parallel with a semaphore limit.
         """
         if self.semaphore is None:
-            self.semaphore = asyncio.Semaphore(5)
+            self.semaphore = asyncio.Semaphore(50)
 
         redis_client = aioredis.from_url(self.redis_url)
         

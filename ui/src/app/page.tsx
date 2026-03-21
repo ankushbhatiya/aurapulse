@@ -98,9 +98,9 @@ export default function Home() {
         }
         
         if (data.track_id === "TrackA") {
-          setFeedA((prev) => [data, ...prev].slice(0, 100));
+          setFeedA((prev) => [data, ...prev].slice(0, 1000));
         } else if (data.track_id === "TrackB") {
-          setFeedB((prev) => [data, ...prev].slice(0, 100));
+          setFeedB((prev) => [data, ...prev].slice(0, 1000));
         }
       } catch (e) {
         console.error("Error parsing SSE data", e);

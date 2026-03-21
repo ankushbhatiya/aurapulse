@@ -25,7 +25,7 @@ def is_circuit_broken(sim_id: str) -> bool:
     base_url = os.getenv("LLM_BASE_URL", "")
     is_local = "localhost" in base_url or "host.docker.internal" in base_url or not base_url
     
-    limit = 50000 
+    limit = 1000000 
     usage = int(r.get(f"tokens:{sim_id}") or 0)
     
     if usage > limit and not is_local:
