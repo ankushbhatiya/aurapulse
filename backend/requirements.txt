@@ -9,3 +9,4 @@ sse-starlette==2.0.0
 zep-python==2.0.0
 pytest==8.0.0
 requests==2.31.0
+pydantic-settings==2.2.1

@@ -4,21 +4,14 @@ import uuid
 from typing import List, Dict
 from neo4j import GraphDatabase
 from litellm import completion
-from engine.llm import STRATEGIC_LLM, LLM_BASE_URL
-from dotenv import load_dotenv
-
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
-
-# Configuration
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+from api.config import settings
 
 class GraphConstructor:
     def __init__(self):
-        self.driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        self.driver = GraphDatabase.driver(
+            settings.NEO4J_URI, 
+            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD) if settings.NEO4J_PASSWORD else None
+        )
 
     def close(self):
         self.driver.close()
@@ -53,8 +46,8 @@ class GraphConstructor:
         for attempt in range(3):
             try:
                 response = completion(
-                    model=STRATEGIC_LLM,
-                    api_base=LLM_BASE_URL,
+                    model=settings.STRATEGIC_LLM_MODEL,
+                    api_base=settings.LLM_BASE_URL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
                     max_tokens=1000

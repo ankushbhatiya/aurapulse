@@ -3,26 +3,19 @@ import time
 import redis
 from litellm import completion, token_counter
 from litellm.exceptions import RateLimitError
-from dotenv import load_dotenv
-
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
+from api.config import settings
 
 # Redis for Circuit Breaker
-REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = os.getenv("REDIS_DB", "0")
-REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
-r = redis.Redis.from_url(REDIS_URL)
+r = redis.Redis.from_url(settings.redis_full_url)
 
-# Dual LLM Config Defaults
-STRATEGIC_LLM = os.getenv("STRATEGIC_LLM_MODEL", "gpt-4o-mini")
-AGENT_LLM = os.getenv("AGENT_LLM_MODEL", "gpt-4o-mini")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+# Dual LLM Config
+STRATEGIC_LLM = settings.STRATEGIC_LLM_MODEL
+AGENT_LLM = settings.AGENT_LLM_MODEL
+LLM_BASE_URL = settings.LLM_BASE_URL
 
 def is_circuit_broken(sim_id: str) -> bool:
     # Disable circuit breaker for local testing
-    base_url = os.getenv("LLM_BASE_URL", "")
+    base_url = settings.LLM_BASE_URL or ""
     is_local = "localhost" in base_url or "host.docker.internal" in base_url or not base_url
     
     limit = 1000000 

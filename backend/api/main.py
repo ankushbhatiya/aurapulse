@@ -10,14 +10,10 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
 import redis
+from api.config import settings
 from engine.celery_app import run_dual_swarm, celery_app
 from engine.report_agent import ReportAgent
 from graph.constructor import GraphConstructor
-from dotenv import load_dotenv
-
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
 
 app = FastAPI()
 
@@ -30,10 +26,7 @@ app.add_middleware(
 )
 
 # Standard redis client
-REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = os.getenv("REDIS_DB", "0")
-REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
-r_std = redis.Redis.from_url(REDIS_URL)
+r_std = redis.Redis.from_url(settings.redis_full_url)
 
 class ABPayload(BaseModel):
     postA: str
@@ -132,7 +125,7 @@ async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
 
 @app.get("/stream")
 async def stream_simulation():
-    r = aioredis.from_url(REDIS_URL)
+    r = aioredis.from_url(settings.redis_full_url)
     pubsub = r.pubsub()
     await pubsub.subscribe("sim_stream")
 

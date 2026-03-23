@@ -6,22 +6,13 @@ import asyncio
 from typing import List, Dict
 from engine.agent import generate_agent_response_async
 from graph.retriever import get_context_for_post
-from dotenv import load_dotenv
-
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-print(f"DEBUG: OasisEngine loading config from {CONFIG_PATH}, exists: {os.path.exists(CONFIG_PATH)}")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
-
-REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = os.getenv("REDIS_DB", "0")
-REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
+from api.config import settings
 
 class OasisEngine:
     def __init__(self):
-        self.redis_url = REDIS_URL
+        self.redis_url = settings.redis_full_url
         self.semaphore = None
-        self.app_env = os.getenv("APP_ENV", "development")
+        self.app_env = settings.APP_ENV
         self._persona_lock = None
 
     @property
@@ -41,7 +32,7 @@ class OasisEngine:
         
         try:
             # 1. Load grounded personas with lock
-            file_path = os.path.expanduser("~/.aura/personas.json")
+            file_path = settings.PERSONAS_FILE
             print(f"DEBUG: [{track_id}] Loading personas from: {file_path}")
             
             async with self.persona_lock:

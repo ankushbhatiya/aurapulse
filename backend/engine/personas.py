@@ -6,21 +6,14 @@ import asyncio
 from typing import List, Dict
 from neo4j import GraphDatabase
 from litellm import completion, acompletion
-from engine.llm import STRATEGIC_LLM, LLM_BASE_URL
-from dotenv import load_dotenv
-
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
-
-# Configuration
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+from api.config import settings
 
 def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     try:
-        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        driver = GraphDatabase.driver(
+            settings.NEO4J_URI, 
+            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD) if settings.NEO4J_PASSWORD else None
+        )
         with driver.session() as session:
             result = session.run(
                 "MATCH (n) WHERE n.tenant_id = $client_id AND NOT n:Celebrity RETURN n.name as name LIMIT 20",
@@ -57,7 +50,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
     
     try:
         completion_args = {
-            "model": STRATEGIC_LLM,
+            "model": settings.STRATEGIC_LLM_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -65,8 +58,8 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
             "temperature": 0.85, # Increased for more variety
             "max_tokens": 500
         }
-        if LLM_BASE_URL:
-            completion_args["api_base"] = LLM_BASE_URL
+        if settings.LLM_BASE_URL:
+            completion_args["api_base"] = settings.LLM_BASE_URL
 
         response = await acompletion(**completion_args)
         content = response.choices[0].message.content.strip()
@@ -104,7 +97,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
 
 async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     concepts = get_grounding_concepts(client_id)
-    print(f"Generating {count} high-fidelity personas using {STRATEGIC_LLM} in parallel (limit=4)...")
+    print(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel (limit=4)...")
     
     semaphore = asyncio.Semaphore(4)
 
@@ -127,7 +120,7 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
             p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
             unique_personas.append(p)
 
-    file_path = os.path.expanduser("~/.aura/personas.json")
+    file_path = settings.PERSONAS_FILE
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         json.dump(unique_personas, f, indent=2)

@@ -2,17 +2,9 @@ import os
 import asyncio
 from celery import Celery
 from engine.oasis_engine import OasisEngine
-from dotenv import load_dotenv
+from api.config import settings
 
-# Load global config first
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
-
-REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = os.getenv("REDIS_DB", "0")
-REDIS_URL = f"{REDIS_URL_BASE}/{REDIS_DB}"
-
-celery_app = Celery("aurapulse", broker=REDIS_URL, backend=REDIS_URL)
+celery_app = Celery("aurapulse", broker=settings.redis_full_url, backend=settings.redis_full_url)
 
 @celery_app.task(bind=True)
 def run_dual_swarm(self, postA: str, postB: str, simulation_id: str, agent_count: int = 20):
