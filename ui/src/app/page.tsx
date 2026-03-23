@@ -1,9 +1,7 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from "next-themes";
-import { minidenticon } from 'minidenticons';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
-import { Moon, Sun, Zap, Play, FileText, BarChart3, AlertTriangle, RotateCcw, History, Square, Users, Database, Loader2 } from "lucide-react";
+import { Moon, Sun, RotateCcw, History, Database, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,18 +10,30 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ControlPanel } from '@/components/simulation/ControlPanel';
+import { SimulationFeed, type SimulationMessage } from '@/components/simulation/SimulationFeed';
+import { AnalyticsDashboard, type SimulationReport } from '@/components/simulation/AnalyticsDashboard';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+interface SimulationHistoryItem {
+  id: string;
+  timestamp: string;
+  postA: string;
+  postB: string;
+  status: string;
+  agent_count: string;
+}
+
 export default function Home() {
-  const [feedA, setFeedA] = useState<any[]>([]);
-  const [feedB, setFeedB] = useState<any[]>([]);
-  const [reportA, setReportA] = useState<any>(null);
-  const [reportB, setReportB] = useState<any>(null);
+  const [feedA, setFeedA] = useState<SimulationMessage[]>([]);
+  const [feedB, setFeedB] = useState<SimulationMessage[]>([]);
+  const [reportA, setReportA] = useState<SimulationReport | null>(null);
+  const [reportB, setReportB] = useState<SimulationReport | null>(null);
   const [postA, setPostA] = useState("");
   const [postB, setPostB] = useState("");
-  const [agentCount, setAgentCount] = useState(20);
-  const [totalExpected, setTotalExpected] = useState(40);
+  const [agentCount, setAgentCount] = useState(10);
+  const [totalExpected, setTotalExpected] = useState(20);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationStatusMsg, setSimulationStatusMsg] = useState<string | null>(null);
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
@@ -32,14 +42,44 @@ export default function Home() {
   const [showIngestDialog, setShowIngestDialog] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [ingestText, setIngestText] = useState("");
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<SimulationHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
   // Ref to track if initial load is done to prevent overwriting with defaults
   const isInitialLoadDone = useRef(false);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/simulations`);
+      const data = await res.json();
+      setHistory(data);
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    }
+  }, []);
+
+  const fetchReports = useCallback(async (forceRefresh = false) => {
+    if (!activeSimId) return;
+    setIsGeneratingReport(true);
+    setSimulationStatusMsg("Generating Analysis...");
+    try {
+      const urlA = `${BASE_URL}/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
+      const urlB = `${BASE_URL}/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
+      
+      const [resA, resB] = await Promise.all([fetch(urlA), fetch(urlB)]);
+
+      if (resA.ok) setReportA(await resA.json());
+      if (resB.ok) setReportB(await resB.json());
+    } catch (e) {
+      console.error("Report fetch failed", e);
+    } finally {
+      setIsGeneratingReport(false);
+      setSimulationStatusMsg(null);
+    }
+  }, [activeSimId]);
 
   // 1. Initial Mount & Health Check
   useEffect(() => {
@@ -112,7 +152,7 @@ export default function Home() {
       eventSource.close();
       clearInterval(healthInterval);
     };
-  }, []);
+  }, [fetchHistory]);
 
   // 2. Auto-trigger report when simulation finishes
   useEffect(() => {
@@ -126,7 +166,7 @@ export default function Home() {
       setIsSimulating(false);
       fetchReports(false);
     }
-  }, [feedA.length, feedB.length, totalExpected, isSimulating, activeSimId, isGeneratingReport, reportA]);
+  }, [feedA.length, feedB.length, totalExpected, isSimulating, activeSimId, isGeneratingReport, reportA, fetchReports]);
 
   // 3. Debounced Auto-Save to Backend
   useEffect(() => {
@@ -151,16 +191,6 @@ export default function Home() {
 
     return () => clearTimeout(timeoutId);
   }, [postA, postB, agentCount, sessionId, mounted]);
-
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/simulations`);
-      const data = await res.json();
-      setHistory(data);
-    } catch (e) {
-      console.error("Failed to fetch history", e);
-    }
-  };
 
   const handleSimulate = async () => {
     if (!postA || !postB) return;
@@ -202,15 +232,12 @@ export default function Home() {
     }
   };
 
-  const loadPastSim = async (sim: any) => {
+  const loadPastSim = async (sim: SimulationHistoryItem) => {
     setActiveSimId(sim.id);
-    
-    // Setting these will trigger the auto-save effect, saving this as the new draft
     setPostA(sim.postA || "");
     setPostB(sim.postB || "");
-    const loadedCount = parseInt(sim.agent_count || "20");
+    const loadedCount = parseInt(sim.agent_count || "10");
     setAgentCount(loadedCount);
-    
     setTotalExpected(loadedCount * 2);
     setIsSimulating(false);
     setShowHistory(false);
@@ -224,60 +251,17 @@ export default function Home() {
       ]);
       const dataA = await resA.json();
       const dataB = await resB.json();
-      console.log(`Loaded history for ${sim.id}:`, { dataA, dataB });
       setFeedA(Array.isArray(dataA) ? dataA.reverse() : []);
       setFeedB(Array.isArray(dataB) ? dataB.reverse() : []);
 
-      // Fetch reports for this past simulation
       const [repResA, repResB] = await Promise.all([
         fetch(`${BASE_URL}/report/${sim.id}/TrackA`),
         fetch(`${BASE_URL}/report/${sim.id}/TrackB`)
       ]);
-      if (repResA.ok) {
-        const ra = await repResA.json();
-        console.log("Loaded report A:", ra);
-        setReportA(ra);
-      }
-      if (repResB.ok) {
-        const rb = await repResB.json();
-        console.log("Loaded report B:", rb);
-        setReportB(rb);
-      }
+      if (repResA.ok) setReportA(await repResA.json());
+      if (repResB.ok) setReportB(await repResB.json());
     } catch (e) {
       console.error("Failed to load past sim history", e);
-    }
-  };
-
-  const fetchReports = async (forceRefresh = false) => {
-    if (!activeSimId) return;
-    console.log(`fetchReports triggered: forceRefresh=${forceRefresh}, activeSimId=${activeSimId}`);
-    setIsGeneratingReport(true);
-    setSimulationStatusMsg("Generating Analysis...");
-    try {
-      const urlA = `${BASE_URL}/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
-      const urlB = `${BASE_URL}/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
-      console.log(`Fetching reports from: ${urlA} and ${urlB}`);
-      
-      const [resA, resB] = await Promise.all([
-        fetch(urlA),
-        fetch(urlB)
-      ]);
-
-      if (resA.ok) {
-        const dataA = await resA.json();
-        console.log("Report A Data:", dataA);
-        setReportA(dataA);
-      }
-      if (resB.ok) {
-        const dataB = await resB.json();
-        console.log("Report B Data:", dataB);
-        setReportB(dataB);
-      }
-    } catch (e) {
-      console.error("Report fetch failed", e);
-    } finally {
-      setIsGeneratingReport(false);
-      setSimulationStatusMsg(null);
     }
   };
 
@@ -293,7 +277,6 @@ export default function Home() {
       if (res.ok) {
         setIngestText("");
         setShowIngestDialog(false);
-        // Maybe a subtle toast notification later, but alert for now
         alert("Knowledge Graph Updated successfully.");
       }
     } catch (e) {
@@ -313,7 +296,6 @@ export default function Home() {
     setPostB("");
     setActiveSimId(null);
     
-    // Delete backend draft
     if (sessionId) {
       try {
         await fetch(`${BASE_URL}/draft/${sessionId}`, { method: "DELETE" });
@@ -334,18 +316,18 @@ export default function Home() {
             AURAPULSE <span className="text-pulse">GOD VIEW</span>
           </h1>
           <p className="text-muted-foreground text-xs mt-1 font-mono tracking-widest opacity-70 uppercase italic">
-            {activeSimId ? `SESSION: ${activeSimId}` : "SYSTEM_READY"} // OASIS v1.4
+            {activeSimId ? `SESSION: ${activeSimId}` : "SYSTEM_READY"} {/* OASIS v1.4 */}
           </p>
         </div>
         <div className="flex items-center gap-4">
            {/* Ingestion Trigger */}
            <Dialog open={showIngestDialog} onOpenChange={setShowIngestDialog}>
-             <DialogTrigger render={
+             <DialogTrigger asChild>
                <button className="p-2.5 rounded-xl bg-secondary hover:bg-purple-track/10 hover:text-purple-track transition-all border border-border shadow-sm flex items-center gap-2 cursor-pointer">
                  <Database className="h-5 w-5" />
                  <span className="text-xs font-bold uppercase hidden md:inline">Grounding</span>
                </button>
-             } />
+             </DialogTrigger>
              <DialogContent className="sm:max-w-[600px] bg-zinc-950 border-zinc-800 text-white">
                <DialogHeader>
                  <DialogTitle className="text-pulse font-black tracking-widest uppercase">Knowledge Ingestion</DialogTitle>
@@ -402,245 +384,32 @@ export default function Home() {
       </header>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-        {/* Left: Setup */}
-        <section className="lg:col-span-4 space-y-6">
-          <div className="glass-panel p-6 border-pulse/20 shadow-xl">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-8 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-pulse fill-pulse" />
-              1. A/B Configuration
-            </h2>
-            
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <textarea 
-                  className="w-full h-24 bg-background/50 border border-border rounded-xl p-4 text-xs focus:outline-none focus:border-pulse/50 transition-all resize-none font-mono" 
-                  placeholder="Post A (Baseline)"
-                  value={postA}
-                  onChange={(e) => setPostA(e.target.value)}
-                />
-                <textarea 
-                  className="w-full h-24 bg-background/50 border border-border rounded-xl p-4 text-xs focus:outline-none focus:border-pulse/50 transition-all resize-none font-mono" 
-                  placeholder="Post B (Variant)"
-                  value={postB}
-                  onChange={(e) => setPostB(e.target.value)}
-                />
-              </div>
-
-              <div className="p-4 bg-secondary/30 rounded-xl border border-border">
-                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                       <Users className="h-3 w-3 text-pulse" /> Swarm Size
-                    </label>
-                    <span className="text-xs font-mono text-pulse font-bold">{agentCount} Agents</span>
-                 </div>
-                 <div className="px-2">
-                   <input 
-                     type="range" min="5" max="500" step="5"
-                     value={agentCount}
-                     onChange={(e) => setAgentCount(parseInt(e.target.value))}
-                     className="w-full accent-pulse h-1 bg-background rounded-full appearance-none cursor-pointer py-4"
-                   />
-                 </div>
-                 <div className="flex justify-between mt-2 opacity-30 text-[8px] font-bold uppercase tracking-tighter">
-                    <span>Sparse</span>
-                    <span>Dense Swarm</span>
-                 </div>
-              </div>
-              
-              <div className="flex gap-3 pt-2">
-                {!isSimulating ? (
-                  <button 
-                    onClick={handleSimulate}
-                    disabled={!postA || !postB}
-                    className="flex-grow bg-pulse text-background font-black py-4 rounded-xl transition-all active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2 shadow-lg shadow-pulse/20"
-                  >
-                    <Play className="h-4 w-4 fill-current" />
-                    <span className="uppercase tracking-tighter font-bold">Initialize Deployment</span>
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => stopSimulation()}
-                    className="flex-grow bg-neon-red text-white font-black py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-neon-red/20"
-                  >
-                    <Square className="h-4 w-4 fill-current" />
-                    <span className="uppercase tracking-tighter font-bold text-sm">Interrupt Signal</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-panel p-6 border-dashed border-border/50 bg-transparent flex items-center justify-between">
-             <div>
-                <h3 className="text-[10px] font-bold uppercase text-muted-foreground mb-1 tracking-widest opacity-60">Engine Capacity</h3>
-                <p className="text-xs text-muted-foreground/80 font-medium">
-                  {simulationStatusMsg || (isSimulating ? "High Concurrency Execution" : "Awaiting Configuration")}
-                </p>
-             </div>
-             <div className={`h-2 w-2 rounded-full ${isSimulating || isGeneratingReport ? 'bg-pulse animate-pulse' : 'bg-zinc-700'}`} />
-          </div>
-        </section>
+        <ControlPanel 
+          postA={postA} setPostA={setPostA}
+          postB={postB} setPostB={setPostB}
+          agentCount={agentCount} setAgentCount={setAgentCount}
+          isSimulating={isSimulating}
+          handleSimulate={handleSimulate}
+          stopSimulation={stopSimulation}
+          simulationStatusMsg={simulationStatusMsg}
+          isGeneratingReport={isGeneratingReport}
+        />
         
-        {/* Center: Dual Feed */}
-        <section className="lg:col-span-5 flex flex-col h-[75vh]">
-          <div className="glass-panel flex-grow flex flex-col overflow-hidden border-pulse/10 shadow-2xl">
-            <div className="p-4 border-b border-border flex justify-between items-center bg-muted/20">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-purple-track flex items-center gap-2">
-                <span className="h-4 w-1 bg-purple-track rounded-full" />
-                2. Real-Time Swarm
-              </h2>
-              {isSimulating && <span className="text-[10px] font-mono text-pulse animate-pulse">STREAMING_ACTIVE</span>}
-            </div>
-            
-            <div className="flex-grow grid grid-cols-2 divide-x divide-border overflow-hidden">
-               {/* Track A */}
-               <div className="flex flex-col overflow-hidden bg-background/5">
-                 <div className="px-4 py-2 bg-muted/10 border-b border-border flex justify-between items-center">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Track A</span>
-                    <span className="text-[9px] font-mono text-pulse/60">{feedA.length}/{totalExpected}</span>
-                 </div>
-                 <div className="flex-grow p-4 overflow-y-auto space-y-4 custom-scrollbar">
-                    {feedA.map((msg, i) => (
-                      <div key={i} className="animate-in fade-in slide-in-from-left-2 duration-300">
-                        <div className="flex items-center gap-2 mb-1">
-                           <img 
-                             src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
-                             alt={msg.persona_name} 
-                             className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
-                           />
-                           <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
-                           {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
-                        </div>
-                        <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-pulse/20">{msg.comment}</p>
-                      </div>
-                    ))}
-                 </div>
-               </div>
+        <SimulationFeed 
+          feedA={feedA}
+          feedB={feedB}
+          totalExpected={totalExpected}
+          isSimulating={isSimulating}
+        />
 
-               {/* Track B */}
-               <div className="flex flex-col overflow-hidden bg-background/5">
-                 <div className="px-4 py-2 bg-muted/10 border-b border-border flex justify-between items-center">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Track B</span>
-                    <span className="text-[9px] font-mono text-pulse/60">{feedB.length}/{totalExpected}</span>
-                 </div>
-                 <div className="flex-grow p-4 overflow-y-auto space-y-4 custom-scrollbar">
-                    {feedB.map((msg, i) => (
-                      <div key={i} className="animate-in fade-in slide-in-from-right-2 duration-300">
-                        <div className="flex items-center gap-2 mb-1">
-                           <img 
-                             src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
-                             alt={msg.persona_name} 
-                             className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
-                           />
-                           <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
-                           {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
-                        </div>
-                        <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-purple-track/20">{msg.comment}</p>
-                      </div>
-                    ))}
-                 </div>
-               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Right: Analytics */}
-        <section className="lg:col-span-3 space-y-6 flex flex-col h-[75vh]">
-          <div className="glass-panel p-6 border-neon-red/10 shadow-xl flex-grow overflow-y-auto custom-scrollbar">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-neon-red mb-8 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              3. Predictive ROI
-            </h2>
-            
-            {(feedA.length > 0 || feedB.length > 0) && (
-              <div className="flex flex-col gap-2 mb-8">
-                {!reportA ? (
-                  <button 
-                    onClick={() => fetchReports(false)}
-                    disabled={isGeneratingReport}
-                    className="w-full bg-secondary border border-border p-4 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-secondary/80 transition-all flex items-center justify-center gap-2"
-                  >
-                    <FileText className={`h-4 w-4 ${isGeneratingReport ? 'animate-bounce' : ''}`} />
-                    {isGeneratingReport ? "Processing Swarm Data..." : "Generate Analysis"}
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => fetchReports(true)}
-                    disabled={isGeneratingReport}
-                    className="w-full bg-secondary/20 border border-border/50 p-2 rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-secondary/40 transition-all flex items-center justify-center gap-2 opacity-60 hover:opacity-100"
-                  >
-                    <RotateCcw className={`h-3 w-3 ${isGeneratingReport ? 'animate-spin' : ''}`} />
-                    {isGeneratingReport ? "Re-Analyzing..." : "Regenerate Analysis"}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!(reportA && reportB) ? (
-              <div className="space-y-10 py-10 opacity-30 text-center">
-                 <div className="relative h-24 w-24 mx-auto mb-6">
-                    <div className="absolute inset-0 border-2 border-muted rounded-full" />
-                    <div className="absolute inset-0 border-2 border-pulse rounded-full border-t-transparent animate-[spin_4s_linear_infinite]" />
-                 </div>
-                 <p className="text-[10px] uppercase tracking-widest font-bold">Awaiting Data</p>
-              </div>
-            ) : (
-              <div className="space-y-8 animate-in fade-in duration-700">
-                 <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="p-3 bg-pulse/5 border border-pulse/20 rounded-xl">
-                       <span className="text-[8px] font-black text-pulse/60 uppercase block mb-1">Track A Score</span>
-                       <div className="text-2xl font-black text-pulse">{reportA?.confidence_score}%</div>
-                    </div>
-                    <div className="p-3 bg-purple-track/5 border border-purple-track/20 rounded-xl">
-                       <span className="text-[8px] font-black text-purple-track/60 uppercase block mb-1">Track B Score</span>
-                       <div className="text-2xl font-black text-purple-track">{reportB?.confidence_score}%</div>
-                    </div>
-                 </div>
-                 <div className="p-4 bg-neon-red/5 border border-neon-red/20 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2 uppercase text-[9px] font-black text-neon-red">
-                       <AlertTriangle className="h-3 w-3" /> Risk Insight
-                    </div>
-                    <p className="text-[10px] text-zinc-400 font-mono italic leading-relaxed">{reportB?.top_risk_factor || reportA?.top_risk_factor}</p>
-                 </div>
-                 <div className="space-y-6">
-                    {[
-                      { label: "Viral Momentum", valA: reportA?.viral_momentum, valB: reportB?.viral_momentum },
-                      { label: "Controversy Risk", valA: reportA?.controversy_risk, valB: reportB?.controversy_risk },
-                      { label: "Community Drift", valA: reportA?.community_drift, valB: reportB?.community_drift }
-                    ].map((item) => (
-                      <div key={item.label} className="space-y-3">
-                        <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">
-                          <span>{item.label}</span>
-                        </div>
-
-                        {/* Track A Bar */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center px-1">
-                            <span className="text-[7px] font-bold text-pulse/80 uppercase">Track A</span>
-                            <span className="text-[8px] font-mono text-pulse">{item.valA}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div style={{ width: `${item.valA || 0}%` }} className={`h-full bg-pulse shadow-[0_0_8px_rgba(0,246,255,0.2)]`} />
-                          </div>
-                        </div>
-
-                        {/* Track B Bar */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center px-1">
-                            <span className="text-[7px] font-bold text-purple-track/80 uppercase">Track B</span>
-                            <span className="text-[8px] font-mono text-purple-track">{item.valB}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                            <div style={{ width: `${item.valB || 0}%` }} className={`h-full bg-purple-track shadow-[0_0_8px_rgba(100,255,218,0.2)]`} />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                 </div>
-              </div>
-            )}
-          </div>
-        </section>
+        <AnalyticsDashboard 
+          reportA={reportA}
+          reportB={reportB}
+          feedA={feedA}
+          feedB={feedB}
+          isGeneratingReport={isGeneratingReport}
+          fetchReports={fetchReports}
+        />
       </div>
 
       {/* History Sidebar */}
@@ -682,9 +451,6 @@ export default function Home() {
                           </span>
                           <span className="text-[10px] font-mono opacity-40">{sim.agent_count} AGENTS</span>
                        </div>
-                       <span className="text-[10px] font-black text-muted-foreground uppercase flex items-center gap-1">
-                         View Deck <Play className="h-2 w-2 fill-current" />
-                       </span>
                     </div>
                   </div>
                 ))
