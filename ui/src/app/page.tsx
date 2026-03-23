@@ -13,6 +13,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export default function Home() {
   const [feedA, setFeedA] = useState<any[]>([]);
   const [feedB, setFeedB] = useState<any[]>([]);
@@ -46,7 +48,7 @@ export default function Home() {
     // Connectivity Polling
     const checkHealth = async () => {
       try {
-        const res = await fetch("http://localhost:8000/health");
+        const res = await fetch(`${BASE_URL}/health`);
         setIsConnected(res.ok);
       } catch (e) {
         setIsConnected(false);
@@ -66,7 +68,7 @@ export default function Home() {
     // Fetch initial draft from backend
     const loadDraft = async (sid: string) => {
       try {
-        const res = await fetch(`http://localhost:8000/draft/${sid}`);
+        const res = await fetch(`${BASE_URL}/draft/${sid}`);
         const draft = await res.json();
         if (draft) {
           setPostA(draft.postA || "");
@@ -83,7 +85,7 @@ export default function Home() {
     loadDraft(currentSessionId);
     fetchHistory();
 
-    const eventSource = new EventSource("http://localhost:8000/stream");
+    const eventSource = new EventSource(`${BASE_URL}/stream`);
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -132,7 +134,7 @@ export default function Home() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        await fetch("http://localhost:8000/draft", {
+        await fetch(`${BASE_URL}/draft`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -152,7 +154,7 @@ export default function Home() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch("http://localhost:8000/simulations");
+      const res = await fetch(`${BASE_URL}/simulations`);
       const data = await res.json();
       setHistory(data);
     } catch (e) {
@@ -170,7 +172,7 @@ export default function Home() {
     setReportB(null);
     setTotalExpected(agentCount * 2); // Default estimate
     try {
-      const res = await fetch("http://localhost:8000/simulate", {
+      const res = await fetch(`${BASE_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ postA, postB, agent_count: agentCount }),
@@ -185,12 +187,15 @@ export default function Home() {
     }
   };
 
-  const stopSimulation = async () => {
-    if (!activeSimId) return;
+  const stopSimulation = async (sim_id_to_stop?: string) => {
+    const sid = sim_id_to_stop || activeSimId;
+    if (!sid) return;
     try {
-      await fetch(`http://localhost:8000/stop/${activeSimId}`, { method: "POST" });
-      setIsSimulating(false);
-      setSimulationStatusMsg("Simulation Interrupted.");
+      await fetch(`${BASE_URL}/stop/${sid}`, { method: "POST" });
+      if (!sim_id_to_stop) {
+        setIsSimulating(false);
+        setSimulationStatusMsg("Simulation Interrupted.");
+      }
       fetchHistory();
     } catch (e) {
       console.error("Stop failed", e);
@@ -214,8 +219,8 @@ export default function Home() {
     
     try {
       const [resA, resB] = await Promise.all([
-        fetch(`http://localhost:8000/history/${sim.id}/TrackA`),
-        fetch(`http://localhost:8000/history/${sim.id}/TrackB`)
+        fetch(`${BASE_URL}/history/${sim.id}/TrackA`),
+        fetch(`${BASE_URL}/history/${sim.id}/TrackB`)
       ]);
       const dataA = await resA.json();
       const dataB = await resB.json();
@@ -225,8 +230,8 @@ export default function Home() {
 
       // Fetch reports for this past simulation
       const [repResA, repResB] = await Promise.all([
-        fetch(`http://localhost:8000/report/${sim.id}/TrackA`),
-        fetch(`http://localhost:8000/report/${sim.id}/TrackB`)
+        fetch(`${BASE_URL}/report/${sim.id}/TrackA`),
+        fetch(`${BASE_URL}/report/${sim.id}/TrackB`)
       ]);
       if (repResA.ok) {
         const ra = await repResA.json();
@@ -249,8 +254,8 @@ export default function Home() {
     setIsGeneratingReport(true);
     setSimulationStatusMsg("Generating Analysis...");
     try {
-      const urlA = `http://localhost:8000/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
-      const urlB = `http://localhost:8000/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
+      const urlA = `${BASE_URL}/report/${activeSimId}/TrackA?force_refresh=${forceRefresh}`;
+      const urlB = `${BASE_URL}/report/${activeSimId}/TrackB?force_refresh=${forceRefresh}`;
       console.log(`Fetching reports from: ${urlA} and ${urlB}`);
       
       const [resA, resB] = await Promise.all([
@@ -280,7 +285,7 @@ export default function Home() {
     if (!ingestText) return;
     setIsIngesting(true);
     try {
-      const res = await fetch("http://localhost:8000/ingest", {
+      const res = await fetch(`${BASE_URL}/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: ingestText }),
@@ -311,7 +316,7 @@ export default function Home() {
     // Delete backend draft
     if (sessionId) {
       try {
-        await fetch(`http://localhost:8000/draft/${sessionId}`, { method: "DELETE" });
+        await fetch(`${BASE_URL}/draft/${sessionId}`, { method: "DELETE" });
       } catch (e) {
         console.error("Failed to clear backend draft", e);
       }
@@ -454,7 +459,7 @@ export default function Home() {
                   </button>
                 ) : (
                   <button 
-                    onClick={stopSimulation}
+                    onClick={() => stopSimulation()}
                     className="flex-grow bg-neon-red text-white font-black py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-neon-red/20"
                   >
                     <Square className="h-4 w-4 fill-current" />
