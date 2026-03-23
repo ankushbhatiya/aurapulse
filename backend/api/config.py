@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     # App Settings
     APP_ENV: str = "development"
     DEBUG: bool = True
+    DEFAULT_AGENT_COUNT: int = 10
     
     # Redis Settings
     REDIS_URL: str = "redis://localhost:6379"

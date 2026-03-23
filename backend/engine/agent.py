@@ -3,13 +3,7 @@ import os
 import time
 import asyncio
 from litellm import completion, acompletion, token_counter
-from dotenv import load_dotenv
-
-# Load global config
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv(
-    "/app/.aura/aura.cfg"
-)
+from api.config import settings
 
 # Optional Zep Integration
 try:
@@ -19,7 +13,7 @@ except ImportError:
     ZepMessage = None
 
 # Zep Config
-ZEP_API_KEY = os.getenv("ZEP_API_KEY")
+ZEP_API_KEY = settings.ZEP_API_KEY
 
 print(f"DEBUG: ZEP_API_KEY starts with: {str(ZEP_API_KEY)[:10]}...")
 
@@ -116,7 +110,7 @@ async def generate_agent_response_async(
     """
 
     # 3. Check circuit breaker
-    if is_circuit_broken(sim_id):
+    if await is_circuit_broken(sim_id):
         return "CIRCUIT_BREAKER_TRIPPED"
 
     comment = "Error: Agent silent."
@@ -129,7 +123,7 @@ async def generate_agent_response_async(
         try:
             # Count Tokens (using AGENT_LLM)
             tokens = token_counter(model="gpt-4o-mini", messages=messages)
-            r.incrby(f"tokens:{sim_id}", tokens)
+            await r.incrby(f"tokens:{sim_id}", tokens)
 
             completion_args = {
                 "model": AGENT_LLM,

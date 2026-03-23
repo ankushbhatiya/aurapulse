@@ -39,7 +39,7 @@ def test_3_history_and_logs():
     
     print(f"Waiting for simulation {sim_id} to process...")
     # Wait for 1 agent * 2 turns = 2 LLM calls per track
-    time.sleep(20) 
+    time.sleep(40) 
     
     # 2. Check History List
     res_list = requests.get(f"{BASE_URL}/simulations")

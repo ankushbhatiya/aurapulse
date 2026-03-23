@@ -1,22 +1,18 @@
 import os
 import json
-import time
+import asyncio
 from engine.llm import STRATEGIC_LLM, LLM_BASE_URL, r
 from typing import List, Dict
-from litellm import completion
+from litellm import completion, acompletion
 from litellm.exceptions import RateLimitError
-from dotenv import load_dotenv
-
-# Load global config
-CONFIG_PATH = os.path.expanduser("~/.aura/aura.cfg")
-load_dotenv(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else load_dotenv("/app/.aura/aura.cfg")
+from api.config import settings
 
 class ReportAgent:
     def __init__(self):
         self.redis_client = r
-        self.app_env = os.getenv("APP_ENV", "development")
+        self.app_env = settings.APP_ENV
 
-    def generate_report(self, track_id: str, simulation_data: List[Dict]) -> Dict:
+    async def generate_report(self, track_id: str, simulation_data: List[Dict]) -> Dict:
         """
         Analyzes the full simulation log and generates a strategic ROI report.
         """
@@ -25,12 +21,12 @@ class ReportAgent:
 
         # Get simulation metadata to find the original post for this track
         sim_id = simulation_data[0].get("simulation_id")
-        meta = self.redis_client.hgetall(f"sim:{sim_id}:meta")
+        meta = await self.redis_client.hgetall(f"sim:{sim_id}:meta")
         
         post_text = ""
         if meta:
-            post_key = b"postA" if track_id == "TrackA" else b"postB"
-            post_text = meta.get(post_key, b"").decode("utf-8")
+            post_key = "postA" if track_id == "TrackA" else "postB"
+            post_text = meta.get(post_key, "")
 
         # Prepare summary for LLM
         swarm_summary = "\n".join([
@@ -72,7 +68,7 @@ class ReportAgent:
 
         for attempt in range(3):
             try:
-                response = completion(
+                response = await acompletion(
                     model=STRATEGIC_LLM,
                     api_base=LLM_BASE_URL,
                     messages=[
@@ -107,7 +103,7 @@ class ReportAgent:
 
                 return json.loads(content)
             except RateLimitError:
-                time.sleep(2 ** attempt)
+                await asyncio.sleep(2 ** attempt)
             except Exception as e:
                 print(f"Report Generation Attempt {attempt+1} failed: {e}")
                 if attempt == 2:
@@ -128,4 +124,4 @@ if __name__ == "__main__":
         {"persona_name": "User_1", "bias": "Hater", "comment": "This is terrible, I hate it."},
         {"persona_name": "User_2", "bias": "Super-fan", "comment": "Amazing! Love the sustainability."}
     ]
-    print(agent.generate_report("TestTrack", mock_data))
+    asyncio.run(agent.generate_report("TestTrack", mock_data))

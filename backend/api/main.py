@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
-import redis
 from api.config import settings
 from engine.celery_app import run_dual_swarm, celery_app
 from engine.report_agent import ReportAgent
@@ -25,13 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Standard redis client
-r_std = redis.Redis.from_url(settings.redis_full_url)
+# Async redis client
+redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
 
 class ABPayload(BaseModel):
     postA: str
     postB: str
-    agent_count: int = 20
+    agent_count: int = settings.DEFAULT_AGENT_COUNT
 
 class DraftPayload(BaseModel):
     session_id: str
@@ -50,20 +49,20 @@ async def trigger_simulation(payload: ABPayload):
     # Store simulation metadata
     sim_meta = {
         "id": sim_id,
-        "timestamp": time.time(),
+        "timestamp": str(time.time()),
         "postA": payload.postA,
         "postB": payload.postB,
-        "agent_count": payload.agent_count,
+        "agent_count": str(payload.agent_count),
         "status": "Running"
     }
-    r_std.hset(f"sim:{sim_id}:meta", mapping=sim_meta)
-    r_std.lpush("simulations:list", sim_id)
+    await redis_client.hset(f"sim:{sim_id}:meta", mapping=sim_meta)
+    await redis_client.lpush("simulations:list", sim_id)
     
     # Trigger SINGLE celery task that runs BOTH tracks in parallel
     task = run_dual_swarm.delay(payload.postA, payload.postB, sim_id, payload.agent_count)
     
     # Store task ID so we can stop it if requested
-    r_std.hset(f"sim:{sim_id}:tasks", mapping={
+    await redis_client.hset(f"sim:{sim_id}:tasks", mapping={
         "DualTrack": task.id
     })
     
@@ -71,11 +70,11 @@ async def trigger_simulation(payload: ABPayload):
 
 @app.post("/stop/{sim_id}")
 async def stop_simulation(sim_id: str):
-    tasks = r_std.hgetall(f"sim:{sim_id}:tasks")
+    tasks = await redis_client.hgetall(f"sim:{sim_id}:tasks")
     for track, task_id in tasks.items():
-        celery_app.control.revoke(task_id.decode("utf-8"), terminate=True)
+        celery_app.control.revoke(task_id, terminate=True)
     
-    r_std.hset(f"sim:{sim_id}:meta", "status", "Stopped")
+    await redis_client.hset(f"sim:{sim_id}:meta", "status", "Stopped")
     return {"status": "Simulation stopped", "id": sim_id}
 
 @app.get("/health")
@@ -84,20 +83,18 @@ async def health_check():
 
 @app.get("/simulations")
 async def list_simulations():
-    sim_ids = r_std.lrange("simulations:list", 0, 19) # Last 20
+    sim_ids = await redis_client.lrange("simulations:list", 0, 19) # Last 20
     results = []
     for sid in sim_ids:
-        sid_str = sid.decode("utf-8")
-        meta = r_std.hgetall(f"sim:{sid_str}:meta")
+        meta = await redis_client.hgetall(f"sim:{sid}:meta")
         if meta:
-            # Decode bytes to strings
-            results.append({k.decode("utf-8"): v.decode("utf-8") for k, v in meta.items()})
+            results.append(meta)
     return results
 
 @app.get("/history/{sim_id}/{track_id}")
 async def get_history(sim_id: str, track_id: str):
-    logs = r_std.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
-    return [json.loads(l.decode("utf-8")) for l in logs]
+    logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
+    return [json.loads(l) for l in logs]
 
 @app.get("/report/{sim_id}/{track_id}")
 async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
@@ -105,40 +102,36 @@ async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
     
     # 1. Check if report already exists in Redis (unless force_refresh is true)
     if not force_refresh:
-        cached_report = r_std.get(report_key)
+        cached_report = await redis_client.get(report_key)
         if cached_report:
-            return json.loads(cached_report.decode("utf-8"))
+            return json.loads(cached_report)
 
     # 2. If not, generate it
-    logs = r_std.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
+    logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
     if not logs:
         raise HTTPException(status_code=404, detail="No simulation data found.")
     
-    simulation_data = [json.loads(l.decode("utf-8")) for l in logs]
+    simulation_data = [json.loads(l) for l in logs]
     agent = ReportAgent()
     report = agent.generate_report(track_id, simulation_data)
     
     # 3. Store the result in Redis so it's persistent
-    r_std.set(report_key, json.dumps(report))
+    await redis_client.set(report_key, json.dumps(report))
     
     return report
 
 @app.get("/stream")
 async def stream_simulation():
-    r = aioredis.from_url(settings.redis_full_url)
-    pubsub = r.pubsub()
-    await pubsub.subscribe("sim_stream")
-
     async def event_generator():
+        pubsub = redis_client.pubsub()
+        await pubsub.subscribe("sim_stream")
         try:
-            while True:
-                message = await pubsub.get_message(ignore_subscribe_messages=True)
-                if message:
-                    yield {"data": message["data"].decode("utf-8")}
-                await asyncio.sleep(0.1)
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    yield {"data": message["data"]}
         finally:
             await pubsub.unsubscribe("sim_stream")
-            await r.aclose()
+            await pubsub.close()
 
     return EventSourceResponse(event_generator())
 
@@ -150,28 +143,28 @@ async def save_draft(payload: DraftPayload):
     draft_data = {
         "postA": payload.postA,
         "postB": payload.postB,
-        "agent_count": payload.agent_count
+        "agent_count": str(payload.agent_count)
     }
-    r_std.hset(draft_key, mapping=draft_data)
+    await redis_client.hset(draft_key, mapping=draft_data)
     return {"status": "Draft saved", "session_id": payload.session_id}
 
 @app.get("/draft/{session_id}")
 async def get_draft(session_id: str):
     draft_key = f"draft:{session_id}"
-    draft_data = r_std.hgetall(draft_key)
+    draft_data = await redis_client.hgetall(draft_key)
     if not draft_data:
-        return {"postA": "", "postB": "", "agent_count": 20}
+        return {"postA": "", "postB": "", "agent_count": settings.DEFAULT_AGENT_COUNT}
     
     return {
-        "postA": draft_data.get(b"postA", b"").decode("utf-8"),
-        "postB": draft_data.get(b"postB", b"").decode("utf-8"),
-        "agent_count": int(draft_data.get(b"agent_count", b"20").decode("utf-8"))
+        "postA": draft_data.get("postA", ""),
+        "postB": draft_data.get("postB", ""),
+        "agent_count": int(draft_data.get("agent_count", str(settings.DEFAULT_AGENT_COUNT)))
     }
 
 @app.delete("/draft/{session_id}")
 async def delete_draft(session_id: str):
     draft_key = f"draft:{session_id}"
-    r_std.delete(draft_key)
+    await redis_client.delete(draft_key)
     return {"status": "Draft deleted", "session_id": session_id}
 
 # --- KNOWLEDGE INGESTION ---
