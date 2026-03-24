@@ -10,3 +10,4 @@ zep-python==2.0.0
 pytest==8.0.0
 requests==2.31.0
 pydantic-settings==2.2.1
+langchain-text-splitters==0.0.1
