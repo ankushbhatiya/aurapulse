@@ -13,13 +13,6 @@ class OasisEngine:
         self.redis_url = settings.redis_full_url
         self.semaphore = None
         self.app_env = settings.APP_ENV
-        self._persona_lock = None
-
-    @property
-    def persona_lock(self):
-        if self._persona_lock is None:
-            self._persona_lock = asyncio.Lock()
-        return self._persona_lock
 
     async def run_simulation(self, track_id: str, post_text: str, simulation_id: str, turns: int = 2, agent_count: int = 20):
         """
@@ -28,13 +21,14 @@ class OasisEngine:
         if self.semaphore is None:
             self.semaphore = asyncio.Semaphore(50)
 
-        redis_client = aioredis.from_url(self.redis_url)
+        redis_client = aioredis.from_url(self.redis_url, decode_responses=True)
         
         try:
-            # 1. Load grounded personas with lock
+            # 1. Load grounded personas with distributed lock
             from engine.personas import load_personas_from_redis
             
-            async with self.persona_lock:
+            # Use Redis distributed lock to coordinate persona generation across workers
+            async with redis_client.lock(f"lock:personas:{self.app_env}", timeout=60):
                 all_personas = await load_personas_from_redis(client_id=self.app_env)
                 
                 # Dynamic Swarm Scaling
