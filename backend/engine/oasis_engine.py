@@ -32,21 +32,17 @@ class OasisEngine:
         
         try:
             # 1. Load grounded personas with lock
-            file_path = settings.PERSONAS_FILE
-            print(f"DEBUG: [{track_id}] Loading personas from: {file_path}")
+            from engine.personas import load_personas_from_redis
             
             async with self.persona_lock:
-                all_personas = []
-                if os.path.exists(file_path):
-                    with open(file_path, "r") as f:
-                        all_personas = json.load(f)
+                all_personas = await load_personas_from_redis(client_id=self.app_env)
                 
                 # Dynamic Swarm Scaling
                 if agent_count > len(all_personas):
                     print(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
                     await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas..."}))
                     from engine.personas import get_grounding_concepts, create_persona_llm
-                    concepts = get_grounding_concepts(client_id=self.app_env)
+                    concepts = await get_grounding_concepts(client_id=self.app_env)
                     
                     needed = agent_count - len(all_personas)
                     semaphore = asyncio.Semaphore(4)
@@ -59,14 +55,15 @@ class OasisEngine:
                     
                     # Uniqueness check before adding
                     seen_names = {p["name"] for p in all_personas}
+                    import uuid
                     for p in new_batch:
                         if p["name"] in seen_names:
                             p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
                         all_personas.append(p)
                         seen_names.add(p["name"])
                     
-                    with open(file_path, "w") as f:
-                        json.dump(all_personas, f, indent=2)
+                    # Update Redis
+                    await redis_client.set(f"personas:{self.app_env}", json.dumps(all_personas))
 
                 personas = random.sample(all_personas, agent_count)
                 print(f"DEBUG: [{track_id}] Swarm size finalized at: {len(personas)} agents.")

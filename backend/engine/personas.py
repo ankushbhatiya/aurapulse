@@ -3,17 +3,20 @@ import uuid
 import random
 import os
 import asyncio
+import redis.asyncio as aioredis
 from typing import List, Dict
 from neo4j import GraphDatabase
 from litellm import completion, acompletion
 from api.config import settings
 
-def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
+async def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     try:
         driver = GraphDatabase.driver(
             settings.NEO4J_URI, 
             auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD) if settings.NEO4J_PASSWORD else None
         )
+        # neo4j driver doesn't support async naturally in this version without extra steps, 
+        # keep sync for now as it's ingestion time, or use session.execute_read for better practice
         with driver.session() as session:
             result = session.run(
                 "MATCH (n) WHERE n.tenant_id = $client_id AND NOT n:Celebrity RETURN n.name as name LIMIT 20",
@@ -96,7 +99,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
         }
 
 async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
-    concepts = get_grounding_concepts(client_id)
+    concepts = await get_grounding_concepts(client_id)
     print(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel (limit=4)...")
     
     semaphore = asyncio.Semaphore(4)
@@ -120,11 +123,26 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
             p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
             unique_personas.append(p)
 
+    # Save to Redis for distributed access
+    redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
+    await redis_client.set(f"personas:{client_id}", json.dumps(unique_personas))
+    await redis_client.aclose()
+    
+    # Also save to file for legacy/backup compatibility if needed
     file_path = settings.PERSONAS_FILE
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         json.dump(unique_personas, f, indent=2)
-    print(f"Ingestion complete. {len(unique_personas)} personas saved to {file_path}")
+        
+    print(f"Ingestion complete. {len(unique_personas)} personas saved to Redis key 'personas:{client_id}' and {file_path}")
+
+async def load_personas_from_redis(client_id="CLIENT_A") -> List[Dict]:
+    redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
+    data = await redis_client.get(f"personas:{client_id}")
+    await redis_client.aclose()
+    if data:
+        return json.loads(data)
+    return []
 
 if __name__ == "__main__":
     asyncio.run(generate_grounded_personas(4)) # Generate exactly 4 to test stability
