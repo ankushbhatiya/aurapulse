@@ -13,6 +13,7 @@ import {
 import { ControlPanel } from '@/components/simulation/ControlPanel';
 import { SimulationFeed, type SimulationMessage } from '@/components/simulation/SimulationFeed';
 import { AnalyticsDashboard, type SimulationReport } from '@/components/simulation/AnalyticsDashboard';
+import { useSSE } from '@/hooks/useSSE';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -24,6 +25,14 @@ interface SimulationHistoryItem {
   status: string;
   agent_count: string;
 }
+
+interface SSEStatusMessage {
+  type: "status";
+  message: string;
+  simulation_id?: string;
+}
+
+type SSEData = SimulationMessage | SSEStatusMessage;
 
 export default function Home() {
   const [feedA, setFeedA] = useState<SimulationMessage[]>([]);
@@ -81,7 +90,30 @@ export default function Home() {
     }
   }, [activeSimId]);
 
-  // 1. Initial Mount & Health Check
+  // 1. Stream Management
+  const streamUrl = activeSimId ? `${BASE_URL}/stream?sim_id=${activeSimId}` : `${BASE_URL}/stream`;
+  useSSE<SSEData>(streamUrl, useCallback((data: SSEData) => {
+    if ("type" in data && data.type === "status") {
+      if (!activeSimId || data.simulation_id === activeSimId) {
+        setSimulationStatusMsg(data.message);
+      }
+      return;
+    }
+
+    if ("total_expected" in data) {
+      setTotalExpected(prev => Math.max(prev, data.total_expected || 0));
+    }
+    
+    if ("track_id" in data) {
+      if (data.track_id === "TrackA") {
+        setFeedA((prev) => [data as SimulationMessage, ...prev].slice(0, 1000));
+      } else if (data.track_id === "TrackB") {
+        setFeedB((prev) => [data as SimulationMessage, ...prev].slice(0, 1000));
+      }
+    }
+  }, [activeSimId]));
+
+  // 2. Initial Mount & Health Check
   useEffect(() => {
     setMounted(true);
 
@@ -130,44 +162,6 @@ export default function Home() {
     };
   }, [fetchHistory]);
 
-  // 2. Stream Management
-  useEffect(() => {
-    if (!mounted) return;
-
-    const streamUrl = activeSimId ? `${BASE_URL}/stream?sim_id=${activeSimId}` : `${BASE_URL}/stream`;
-    const eventSource = new EventSource(streamUrl);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === "status") {
-          // If we are filtering by sim_id, we only care about status messages for that sim (or all if no activeSimId)
-          if (!activeSimId || data.simulation_id === activeSimId) {
-            setSimulationStatusMsg(data.message);
-          }
-          return;
-        }
-
-        if (data.total_expected) {
-          setTotalExpected(prev => Math.max(prev, data.total_expected));
-        }
-        
-        if (data.track_id === "TrackA") {
-          setFeedA((prev) => [data, ...prev].slice(0, 1000));
-        } else if (data.track_id === "TrackB") {
-          setFeedB((prev) => [data, ...prev].slice(0, 1000));
-        }
-      } catch (e) {
-        console.error("Error parsing SSE data", e);
-      }
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, [activeSimId, mounted]);
-
   // 3. Auto-trigger report when simulation finishes
   useEffect(() => {
     if (!isSimulating || !activeSimId || isGeneratingReport || reportA) return;
@@ -182,7 +176,7 @@ export default function Home() {
     }
   }, [feedA.length, feedB.length, totalExpected, isSimulating, activeSimId, isGeneratingReport, reportA, fetchReports]);
 
-  // 3. Debounced Auto-Save to Backend
+  // 4. Debounced Auto-Save to Backend
   useEffect(() => {
     if (!mounted || !isInitialLoadDone.current || !sessionId) return;
 
