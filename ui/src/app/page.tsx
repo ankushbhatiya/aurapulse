@@ -125,13 +125,27 @@ export default function Home() {
     loadDraft(currentSessionId);
     fetchHistory();
 
-    const eventSource = new EventSource(`${BASE_URL}/stream`);
+    return () => {
+      clearInterval(healthInterval);
+    };
+  }, [fetchHistory]);
+
+  // 2. Stream Management
+  useEffect(() => {
+    if (!mounted) return;
+
+    const streamUrl = activeSimId ? `${BASE_URL}/stream?sim_id=${activeSimId}` : `${BASE_URL}/stream`;
+    const eventSource = new EventSource(streamUrl);
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
         if (data.type === "status") {
-          setSimulationStatusMsg(data.message);
+          // If we are filtering by sim_id, we only care about status messages for that sim (or all if no activeSimId)
+          if (!activeSimId || data.simulation_id === activeSimId) {
+            setSimulationStatusMsg(data.message);
+          }
           return;
         }
 
@@ -148,13 +162,13 @@ export default function Home() {
         console.error("Error parsing SSE data", e);
       }
     };
+
     return () => {
       eventSource.close();
-      clearInterval(healthInterval);
     };
-  }, [fetchHistory]);
+  }, [activeSimId, mounted]);
 
-  // 2. Auto-trigger report when simulation finishes
+  // 3. Auto-trigger report when simulation finishes
   useEffect(() => {
     if (!isSimulating || !activeSimId || isGeneratingReport || reportA) return;
 

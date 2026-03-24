@@ -121,16 +121,17 @@ async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
     return report
 
 @app.get("/stream")
-async def stream_simulation():
+async def stream_simulation(sim_id: Optional[str] = None):
     async def event_generator():
         pubsub = redis_client.pubsub()
-        await pubsub.subscribe("sim_stream")
+        channel = f"sim_stream:{sim_id}" if sim_id else "sim_stream"
+        await pubsub.subscribe(channel)
         try:
             async for message in pubsub.listen():
                 if message["type"] == "message":
                     yield {"data": message["data"]}
         finally:
-            await pubsub.unsubscribe("sim_stream")
+            await pubsub.unsubscribe(channel)
             await pubsub.close()
 
     return EventSourceResponse(event_generator())

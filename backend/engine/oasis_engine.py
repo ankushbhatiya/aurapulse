@@ -34,7 +34,8 @@ class OasisEngine:
                 # Dynamic Swarm Scaling
                 if agent_count > len(all_personas):
                     print(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
-                    await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas..."}))
+                    await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
+                    await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
                     from engine.personas import get_grounding_concepts, create_persona_llm
                     concepts = await get_grounding_concepts(client_id=self.app_env)
                     
@@ -67,7 +68,8 @@ class OasisEngine:
             
             simulation_history = []
             
-            await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Running Swarm..."}))
+            await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id}))
+            await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id}))
 
             for turn in range(1, turns + 1):
                 print(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
@@ -109,6 +111,7 @@ class OasisEngine:
                 }
                 
                 await redis_client.publish('sim_stream', json.dumps(message))
+                await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps(message))
                 await redis_client.rpush(f"logs:{simulation_id}:{track_id}", json.dumps(message))
                 return message
             except Exception as e:
