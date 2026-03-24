@@ -15,7 +15,7 @@ import { SimulationFeed, type SimulationMessage } from '@/components/simulation/
 import { AnalyticsDashboard, type SimulationReport } from '@/components/simulation/AnalyticsDashboard';
 import { useSSE } from '@/hooks/useSSE';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/v1";
 
 interface SimulationHistoryItem {
   id: string;
