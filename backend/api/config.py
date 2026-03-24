@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Zep Settings
     ZEP_API_KEY: Optional[str] = None
     
+    # Security
+    API_KEY: Optional[str] = None
+    ALLOWED_ORIGINS: str = "*" # Comma-separated list
+    
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
     # Paths
     AURA_HOME: str = os.path.expanduser("~/.aura")
     PERSONAS_FILE: str = os.path.join(os.path.expanduser("~/.aura"), "personas.json")

@@ -4,8 +4,9 @@ import os
 import uuid
 import time
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
@@ -16,9 +17,18 @@ from graph.constructor import GraphConstructor
 
 app = FastAPI()
 
+# Security Setup
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if settings.API_KEY and api_key != settings.API_KEY:
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
+    return api_key
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,7 +52,7 @@ class IngestPayload(BaseModel):
     text: str
     client_id: Optional[str] = "development"
 
-@app.post("/simulate")
+@app.post("/simulate", dependencies=[Depends(get_api_key)])
 async def trigger_simulation(payload: ABPayload):
     sim_id = str(uuid.uuid4())[:8]
     
@@ -70,7 +80,7 @@ async def trigger_simulation(payload: ABPayload):
     
     return {"simulation_id": sim_id, "status": "Started"}
 
-@app.post("/stop/{sim_id}")
+@app.post("/stop/{sim_id}", dependencies=[Depends(get_api_key)])
 async def stop_simulation(sim_id: str):
     tasks = await redis_client.hgetall(f"sim:{sim_id}:tasks")
     for track, task_id in tasks.items():
@@ -140,7 +150,7 @@ async def stream_simulation(sim_id: Optional[str] = None):
 
 # --- DRAFT ENDPOINTS ---
 
-@app.post("/draft")
+@app.post("/draft", dependencies=[Depends(get_api_key)])
 async def save_draft(payload: DraftPayload):
     draft_key = f"draft:{payload.session_id}"
     draft_data = {
@@ -164,7 +174,7 @@ async def get_draft(session_id: str):
         "agent_count": int(draft_data.get("agent_count", str(settings.DEFAULT_AGENT_COUNT)))
     }
 
-@app.delete("/draft/{session_id}")
+@app.delete("/draft/{session_id}", dependencies=[Depends(get_api_key)])
 async def delete_draft(session_id: str):
     draft_key = f"draft:{session_id}"
     await redis_client.delete(draft_key)
@@ -172,7 +182,7 @@ async def delete_draft(session_id: str):
 
 # --- KNOWLEDGE INGESTION ---
 
-@app.post("/ingest")
+@app.post("/ingest", dependencies=[Depends(get_api_key)])
 async def ingest_knowledge(payload: IngestPayload):
     try:
         constructor = GraphConstructor()
