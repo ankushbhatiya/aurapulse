@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
 from api.config import settings
-from engine.celery_app import run_dual_swarm, celery_app
+from engine.celery_app import run_single_swarm, celery_app
 from engine.report_agent import ReportAgent
 from graph.constructor import GraphConstructor
 
@@ -58,12 +58,14 @@ async def trigger_simulation(payload: ABPayload):
     await redis_client.hset(f"sim:{sim_id}:meta", mapping=sim_meta)
     await redis_client.lpush("simulations:list", sim_id)
     
-    # Trigger SINGLE celery task that runs BOTH tracks in parallel
-    task = run_dual_swarm.delay(payload.postA, payload.postB, sim_id, payload.agent_count)
+    # Trigger TWO independent celery tasks
+    taskA = run_single_swarm.delay("TrackA", payload.postA, sim_id, payload.agent_count)
+    taskB = run_single_swarm.delay("TrackB", payload.postB, sim_id, payload.agent_count)
     
-    # Store task ID so we can stop it if requested
+    # Store task IDs so we can stop them if requested
     await redis_client.hset(f"sim:{sim_id}:tasks", mapping={
-        "DualTrack": task.id
+        "TrackA": taskA.id,
+        "TrackB": taskB.id
     })
     
     return {"simulation_id": sim_id, "status": "Started"}
@@ -113,7 +115,7 @@ async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
     
     simulation_data = [json.loads(l) for l in logs]
     agent = ReportAgent()
-    report = agent.generate_report(track_id, simulation_data)
+    report = await agent.generate_report(track_id, simulation_data)
     
     # 3. Store the result in Redis so it's persistent
     await redis_client.set(report_key, json.dumps(report))

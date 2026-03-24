@@ -7,14 +7,11 @@ from api.config import settings
 celery_app = Celery("aurapulse", broker=settings.redis_full_url, backend=settings.redis_full_url)
 
 @celery_app.task(bind=True)
-def run_dual_swarm(self, postA: str, postB: str, simulation_id: str, agent_count: int = 20):
+def run_single_swarm(self, track_id: str, post_text: str, simulation_id: str, agent_count: int = 10):
     engine = OasisEngine()
     
-    async def run_both():
-        await asyncio.gather(
-            engine.run_simulation("TrackA", postA, simulation_id=simulation_id, turns=2, agent_count=agent_count),
-            engine.run_simulation("TrackB", postB, simulation_id=simulation_id, turns=2, agent_count=agent_count)
-        )
+    async def run_it():
+        await engine.run_simulation(track_id, post_text, simulation_id=simulation_id, turns=2, agent_count=agent_count)
     
-    asyncio.run(run_both())
-    return f"Finished Dual Swarm for {simulation_id} with {agent_count} agents"
+    asyncio.run(run_it())
+    return f"Finished {track_id} for {simulation_id}"
