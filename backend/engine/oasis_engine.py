@@ -7,6 +7,7 @@ from typing import List, Dict
 from engine.agent import generate_agent_response_async
 from graph.retriever import get_context_for_post
 from api.config import settings
+from api.logger import logger
 
 class OasisEngine:
     def __init__(self):
@@ -33,7 +34,7 @@ class OasisEngine:
                 
                 # Dynamic Swarm Scaling
                 if agent_count > len(all_personas):
-                    print(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
+                    logger.info(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
                     await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
                     await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
                     from engine.personas import get_grounding_concepts, create_persona_llm
@@ -61,7 +62,7 @@ class OasisEngine:
                     await redis_client.set(f"personas:{self.app_env}", json.dumps(all_personas))
 
                 personas = random.sample(all_personas, agent_count)
-                print(f"DEBUG: [{track_id}] Swarm size finalized at: {len(personas)} agents.")
+                logger.debug(f"[{track_id}] Swarm size finalized at: {len(personas)} agents.")
 
             # 2. Get Knowledge Graph Context
             context = get_context_for_post(post_text, client_id=self.app_env)
@@ -72,7 +73,7 @@ class OasisEngine:
             await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id}))
 
             for turn in range(1, turns + 1):
-                print(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
+                logger.info(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
                 
                 active_personas = random.sample(personas, len(personas))
                 
@@ -115,7 +116,7 @@ class OasisEngine:
                 await redis_client.rpush(f"logs:{simulation_id}:{track_id}", json.dumps(message))
                 return message
             except Exception as e:
-                print(f"Error processing agent {persona['name']}: {e}")
+                logger.error(f"Error processing agent {persona['name']}: {e}")
                 return None
 
 if __name__ == "__main__":

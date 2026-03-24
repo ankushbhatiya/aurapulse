@@ -6,6 +6,7 @@ from typing import List, Dict
 from litellm import completion, acompletion
 from litellm.exceptions import RateLimitError
 from api.config import settings
+from api.logger import logger
 
 class ReportAgent:
     def __init__(self):
@@ -105,7 +106,7 @@ class ReportAgent:
             except RateLimitError:
                 await asyncio.sleep(2 ** attempt)
             except Exception as e:
-                print(f"Report Generation Attempt {attempt+1} failed: {e}")
+                logger.error(f"Report Generation Attempt {attempt+1} failed: {e}")
                 if attempt == 2:
                     return {
                         "viral_momentum": 0,

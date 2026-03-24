@@ -4,6 +4,7 @@ import time
 import asyncio
 from litellm import completion, acompletion, token_counter
 from api.config import settings
+from api.logger import logger
 
 # Optional Zep Integration
 try:
@@ -15,30 +16,28 @@ except ImportError:
 # Zep Config
 ZEP_API_KEY = settings.ZEP_API_KEY
 
-print(f"DEBUG: ZEP_API_KEY starts with: {str(ZEP_API_KEY)[:10]}...")
+logger.debug(f"ZEP_API_KEY starts with: {str(ZEP_API_KEY)[:10]}...")
 
 zep_client = None
 if ZEP_API_KEY and Zep:
-    print(f"DEBUG: Initializing Zep Cloud client")
+    logger.info(f"Initializing Zep Cloud client")
     zep_client = Zep(api_key=ZEP_API_KEY)
 
 
 async def get_agent_memory(session_id: str) -> str:
     if not zep_client:
-        print(
-            f"DEBUG: Zep client not initialized. Skipping memory fetch for {session_id}"
-        )
+        logger.debug(f"Zep client not initialized. Skipping memory fetch for {session_id}")
         return "None."
     try:
-        print(f"DEBUG: Fetching Zep memory for session: {session_id}")
+        logger.debug(f"Fetching Zep memory for session: {session_id}")
         # Zep Cloud uses thread.get_messages to retrieve messages
         response = zep_client.thread.get(thread_id=session_id, lastn=5)
         if response and response.messages:
             history = [m.content for m in response.messages]
-            print(f"DEBUG: Fetched {len(history)} messages from Zep for {session_id}")
+            logger.debug(f"Fetched {len(history)} messages from Zep for {session_id}")
             return " | ".join(history)
     except Exception as e:
-        print(f"DEBUG: Zep Memory Fetch Error for {session_id}: {e}")
+        logger.error(f"Zep Memory Fetch Error for {session_id}: {e}")
     return "None."
 
 
@@ -46,7 +45,7 @@ async def add_agent_memory(session_id: str, user_content: str, assistant_content
     if not zep_client:
         return
     try:
-        print(f"DEBUG: Saving interaction to Zep for session: {session_id}")
+        logger.debug(f"Saving interaction to Zep for session: {session_id}")
 
         messages = [
             ZepMessage(role="user", content=user_content),
@@ -71,9 +70,9 @@ async def add_agent_memory(session_id: str, user_content: str, assistant_content
             zep_client.thread.create(thread_id=session_id, user_id=session_id)
 
         zep_client.thread.add_messages(thread_id=session_id, messages=messages)
-        print(f"DEBUG: Successfully saved pair to Zep for {session_id}")
+        logger.debug(f"Successfully saved pair to Zep for {session_id}")
     except Exception as e:
-        print(f"DEBUG: Zep Memory Save Error for {session_id}: {e}")
+        logger.error(f"Zep Memory Save Error for {session_id}: {e}")
 
 
 async def generate_agent_response_async(
@@ -143,7 +142,7 @@ async def generate_agent_response_async(
             await add_agent_memory(session_id, post_text, comment)
             break
         except Exception as e:
-            print(f"Agent LLM Error ({persona['name']}): {e}")
+            logger.error(f"Agent LLM Error ({persona['name']}): {e}")
             await asyncio.sleep(2**attempt)
 
     return comment
@@ -165,7 +164,7 @@ if __name__ == "__main__":
         "bias": "Hater",
         "vibe": "Aggressive",
     }
-    print(
+    logger.info(
         generate_agent_response(
             test_persona,
             "I love my new steakhouse!",

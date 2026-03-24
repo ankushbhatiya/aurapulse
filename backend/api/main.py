@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
 from api.config import settings
+from api.logger import logger
 from engine.celery_app import run_single_swarm, celery_app
 from engine.report_agent import ReportAgent
 from graph.constructor import GraphConstructor
@@ -69,6 +70,7 @@ async def trigger_simulation(payload: ABPayload):
     await redis_client.lpush("simulations:list", sim_id)
     
     # Trigger TWO independent celery tasks
+    logger.info(f"Triggering simulation {sim_id} with {payload.agent_count} agents")
     taskA = run_single_swarm.delay("TrackA", payload.postA, sim_id, payload.agent_count)
     taskB = run_single_swarm.delay("TrackB", payload.postB, sim_id, payload.agent_count)
     

@@ -8,6 +8,7 @@ from typing import List, Dict
 from neo4j import GraphDatabase
 from litellm import completion, acompletion
 from api.config import settings
+from api.logger import logger
 
 async def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
     try:
@@ -25,7 +26,8 @@ async def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
             concepts = [r["name"] for r in result]
         driver.close()
         return concepts if concepts else ["General Social Media", "Trending Topics"]
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to fetch grounding concepts: {e}")
         return ["General Social Media", "Trending Topics"]
 
 async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
@@ -86,7 +88,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
         data["id"] = str(uuid.uuid4())
         return data
     except Exception as e:
-        print(f"LLM Persona Generation Error: {e}. Falling back to random.")
+        logger.error(f"LLM Persona Generation Error: {e}. Falling back to random.")
         # Fallback to random if LLM fails
         return {
             "id": str(uuid.uuid4()),
@@ -100,7 +102,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
 
 async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     concepts = await get_grounding_concepts(client_id)
-    print(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel (limit=4)...")
+    logger.info(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel (limit=4)...")
     
     semaphore = asyncio.Semaphore(4)
 
@@ -134,7 +136,7 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     with open(file_path, "w") as f:
         json.dump(unique_personas, f, indent=2)
         
-    print(f"Ingestion complete. {len(unique_personas)} personas saved to Redis key 'personas:{client_id}' and {file_path}")
+    logger.info(f"Ingestion complete. {len(unique_personas)} personas saved to Redis key 'personas:{client_id}' and {file_path}")
 
 async def load_personas_from_redis(client_id="CLIENT_A") -> List[Dict]:
     redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
