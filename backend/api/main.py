@@ -9,12 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
-import redis.asyncio as aioredis
 from api.config import settings
 from engine.celery_app import run_single_swarm, celery_app
 from engine.report_agent import ReportAgent
 from graph.constructor import GraphConstructor
 from api.logger import logger
+from api.redis_utils import redis_manager
 
 app = FastAPI(title="AuraPulse API", version="1.4.0")
 
@@ -35,8 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Async redis client
-redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
+# Async redis client from manager
+redis_client = redis_manager.get_client()
 
 # --- MODELS ---
 
@@ -72,31 +72,39 @@ async def trigger_simulation(payload: ABPayload):
         "agent_count": str(payload.agent_count),
         "status": "Running"
     }
-    await redis_client.hset(f"sim:{sim_id}:meta", mapping=sim_meta)
-    await redis_client.lpush("simulations:list", sim_id)
-    
-    # Trigger TWO independent celery tasks
-    logger.info(f"Triggering simulation {sim_id} with {payload.agent_count} agents")
-    taskA = run_single_swarm.delay("TrackA", payload.postA, sim_id, payload.agent_count)
-    taskB = run_single_swarm.delay("TrackB", payload.postB, sim_id, payload.agent_count)
-    
-    # Store task IDs so we can stop them if requested
-    await redis_client.hset(f"sim:{sim_id}:tasks", mapping={
-        "TrackA": taskA.id,
-        "TrackB": taskB.id
-    })
-    
-    return {"simulation_id": sim_id, "status": "Started"}
+    try:
+        await redis_client.hset(f"sim:{sim_id}:meta", mapping=sim_meta)
+        await redis_client.lpush("simulations:list", sim_id)
+        
+        # Trigger TWO independent celery tasks
+        logger.info(f"Triggering simulation {sim_id} with {payload.agent_count} agents")
+        taskA = run_single_swarm.delay("TrackA", payload.postA, sim_id, payload.agent_count)
+        taskB = run_single_swarm.delay("TrackB", payload.postB, sim_id, payload.agent_count)
+        
+        # Store task IDs so we can stop them if requested
+        await redis_client.hset(f"sim:{sim_id}:tasks", mapping={
+            "TrackA": taskA.id,
+            "TrackB": taskB.id
+        })
+        
+        return {"simulation_id": sim_id, "status": "Started"}
+    except Exception as e:
+        logger.error(f"Failed to trigger simulation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to start simulation.")
 
 @v1_router.post("/stop/{sim_id}", dependencies=[Depends(get_api_key)])
 async def stop_simulation(sim_id: str):
     logger.info(f"Stopping simulation {sim_id}")
-    tasks = await redis_client.hgetall(f"sim:{sim_id}:tasks")
-    for track, task_id in tasks.items():
-        celery_app.control.revoke(task_id, terminate=True)
-    
-    await redis_client.hset(f"sim:{sim_id}:meta", "status", "Stopped")
-    return {"status": "Simulation stopped", "id": sim_id}
+    try:
+        tasks = await redis_client.hgetall(f"sim:{sim_id}:tasks")
+        for track, task_id in tasks.items():
+            celery_app.control.revoke(task_id, terminate=True)
+        
+        await redis_client.hset(f"sim:{sim_id}:meta", "status", "Stopped")
+        return {"status": "Simulation stopped", "id": sim_id}
+    except Exception as e:
+        logger.error(f"Error stopping simulation {sim_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error stopping simulation.")
 
 @v1_router.get("/health")
 async def health_check():
@@ -104,18 +112,26 @@ async def health_check():
 
 @v1_router.get("/simulations")
 async def list_simulations():
-    sim_ids = await redis_client.lrange("simulations:list", 0, 19) # Last 20
-    results = []
-    for sid in sim_ids:
-        meta = await redis_client.hgetall(f"sim:{sid}:meta")
-        if meta:
-            results.append(meta)
-    return results
+    try:
+        sim_ids = await redis_client.lrange("simulations:list", 0, 19) # Last 20
+        results = []
+        for sid in sim_ids:
+            meta = await redis_client.hgetall(f"sim:{sid}:meta")
+            if meta:
+                results.append(meta)
+        return results
+    except Exception as e:
+        logger.error(f"Error listing simulations: {e}")
+        return []
 
 @v1_router.get("/history/{sim_id}/{track_id}")
 async def get_history(sim_id: str, track_id: str):
-    logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
-    return [json.loads(l) for l in logs]
+    try:
+        logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
+        return [json.loads(l) for l in logs]
+    except Exception as e:
+        logger.error(f"Error fetching history: {e}")
+        return []
 
 @v1_router.get("/report/{sim_id}/{track_id}")
 async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
@@ -123,25 +139,34 @@ async def get_report(sim_id: str, track_id: str, force_refresh: bool = False):
     
     # 1. Check if report already exists in Redis (unless force_refresh is true)
     if not force_refresh:
-        cached_report = await redis_client.get(report_key)
-        if cached_report:
-            return json.loads(cached_report)
+        try:
+            cached_report = await redis_client.get(report_key)
+            if cached_report:
+                return json.loads(cached_report)
+        except Exception as e:
+            logger.error(f"Error fetching cached report: {e}")
 
     # 2. If not, generate it
-    logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
-    if not logs:
-        logger.warning(f"No simulation data found for {sim_id}:{track_id}")
-        raise HTTPException(status_code=404, detail="No simulation data found.")
-    
-    simulation_data = [json.loads(l) for l in logs]
-    logger.info(f"Generating report for {sim_id}:{track_id} with {len(simulation_data)} entries")
-    agent = ReportAgent()
-    report = await agent.generate_report(track_id, simulation_data)
-    
-    # 3. Store the result in Redis so it's persistent
-    await redis_client.set(report_key, json.dumps(report))
-    
-    return report
+    try:
+        logs = await redis_client.lrange(f"logs:{sim_id}:{track_id}", 0, -1)
+        if not logs:
+            logger.warning(f"No simulation data found for {sim_id}:{track_id}")
+            raise HTTPException(status_code=404, detail="No simulation data found.")
+        
+        simulation_data = [json.loads(l) for l in logs]
+        logger.info(f"Generating report for {sim_id}:{track_id} with {len(simulation_data)} entries")
+        agent = ReportAgent()
+        report = await agent.generate_report(track_id, simulation_data)
+        
+        # 3. Store the result in Redis so it's persistent
+        await redis_client.set(report_key, json.dumps(report))
+        
+        return report
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate report.")
 
 @v1_router.get("/stream")
 async def stream_simulation(sim_id: Optional[str] = None):
@@ -169,27 +194,39 @@ async def save_draft(payload: DraftPayload):
         "postB": payload.postB,
         "agent_count": str(payload.agent_count)
     }
-    await redis_client.hset(draft_key, mapping=draft_data)
-    return {"status": "Draft saved", "session_id": payload.session_id}
+    try:
+        await redis_client.hset(draft_key, mapping=draft_data)
+        return {"status": "Draft saved", "session_id": payload.session_id}
+    except Exception as e:
+        logger.error(f"Error saving draft: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save draft.")
 
 @v1_router.get("/draft/{session_id}")
 async def get_draft(session_id: str):
     draft_key = f"draft:{session_id}"
-    draft_data = await redis_client.hgetall(draft_key)
-    if not draft_data:
+    try:
+        draft_data = await redis_client.hgetall(draft_key)
+        if not draft_data:
+            return {"postA": "", "postB": "", "agent_count": settings.DEFAULT_AGENT_COUNT}
+        
+        return {
+            "postA": draft_data.get("postA", ""),
+            "postB": draft_data.get("postB", ""),
+            "agent_count": int(draft_data.get("agent_count", str(settings.DEFAULT_AGENT_COUNT)))
+        }
+    except Exception as e:
+        logger.error(f"Error getting draft: {e}")
         return {"postA": "", "postB": "", "agent_count": settings.DEFAULT_AGENT_COUNT}
-    
-    return {
-        "postA": draft_data.get("postA", ""),
-        "postB": draft_data.get("postB", ""),
-        "agent_count": int(draft_data.get("agent_count", str(settings.DEFAULT_AGENT_COUNT)))
-    }
 
 @v1_router.delete("/draft/{session_id}", dependencies=[Depends(get_api_key)])
 async def delete_draft(session_id: str):
     draft_key = f"draft:{session_id}"
-    await redis_client.delete(draft_key)
-    return {"status": "Draft deleted", "session_id": session_id}
+    try:
+        await redis_client.delete(draft_key)
+        return {"status": "Draft deleted", "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Error deleting draft: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete draft.")
 
 # --- KNOWLEDGE INGESTION ---
 
@@ -197,7 +234,7 @@ async def delete_draft(session_id: str):
 async def ingest_knowledge(payload: IngestPayload):
     try:
         constructor = GraphConstructor()
-        tenant = payload.client_id or os.getenv("APP_ENV", "development")
+        tenant = payload.client_id or settings.APP_ENV
         constructor.process_seed_text(payload.text, client_id=tenant)
         constructor.close()
         return {"status": "Ingestion complete", "tenant": tenant}
@@ -207,6 +244,10 @@ async def ingest_knowledge(payload: IngestPayload):
 
 # Include the router in the app
 app.include_router(v1_router)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await redis_manager.close()
 
 # Root redirect or simple message
 @app.get("/")

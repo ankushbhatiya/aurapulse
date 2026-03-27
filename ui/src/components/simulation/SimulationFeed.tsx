@@ -1,4 +1,5 @@
 "use client";
+import { useMemo, memo } from 'react';
 import { minidenticon } from 'minidenticons';
 
 export interface SimulationMessage {
@@ -15,6 +16,30 @@ interface SimulationFeedProps {
   totalExpected: number;
   isSimulating: boolean;
 }
+
+const MessageItem = memo(({ msg, isTrackA }: { msg: SimulationMessage; isTrackA: boolean }) => {
+  const avatarSvg = useMemo(() => 
+    `data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`,
+    [msg.persona_name]
+  );
+
+  return (
+    <div className={`animate-in fade-in duration-300 ${isTrackA ? 'slide-in-from-left-2' : 'slide-in-from-right-2'}`}>
+      <div className="flex items-center gap-2 mb-1">
+         <img 
+           src={avatarSvg} 
+           alt={msg.persona_name} 
+           className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
+         />
+         <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
+         {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
+      </div>
+      <p className={`text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l ${isTrackA ? 'border-pulse/20' : 'border-purple-track/20'}`}>{msg.comment}</p>
+    </div>
+  );
+});
+
+MessageItem.displayName = "MessageItem";
 
 export function SimulationFeed({ feedA, feedB, totalExpected, isSimulating }: SimulationFeedProps) {
   return (
@@ -37,18 +62,7 @@ export function SimulationFeed({ feedA, feedB, totalExpected, isSimulating }: Si
              </div>
              <div className="flex-grow p-4 overflow-y-auto space-y-4 custom-scrollbar">
                 {feedA.map((msg, i) => (
-                  <div key={i} className="animate-in fade-in slide-in-from-left-2 duration-300">
-                    <div className="flex items-center gap-2 mb-1">
-                       <img 
-                         src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
-                         alt={msg.persona_name} 
-                         className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
-                       />
-                       <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
-                       {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
-                    </div>
-                    <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-pulse/20">{msg.comment}</p>
-                  </div>
+                  <MessageItem key={`${msg.persona_name}-${i}`} msg={msg} isTrackA={true} />
                 ))}
              </div>
            </div>
@@ -61,18 +75,7 @@ export function SimulationFeed({ feedA, feedB, totalExpected, isSimulating }: Si
              </div>
              <div className="flex-grow p-4 overflow-y-auto space-y-4 custom-scrollbar">
                 {feedB.map((msg, i) => (
-                  <div key={i} className="animate-in fade-in slide-in-from-right-2 duration-300">
-                    <div className="flex items-center gap-2 mb-1">
-                       <img 
-                         src={`data:image/svg+xml;utf8,${encodeURIComponent(minidenticon(msg.persona_name))}`} 
-                         alt={msg.persona_name} 
-                         className="h-5 w-5 rounded-md bg-white/5 p-0.5 border border-white/10" 
-                       />
-                       <span className={`text-[9px] font-black uppercase tracking-tight ${msg.bias === 'Hater' ? 'text-neon-red' : 'text-pulse'}`}>{msg.persona_name}</span>
-                       {msg.reply_to && <span className="text-[8px] opacity-20">→ {msg.reply_to}</span>}
-                    </div>
-                    <p className="text-xs text-foreground/80 leading-snug font-mono italic pl-2 border-l border-purple-track/20">{msg.comment}</p>
-                  </div>
+                  <MessageItem key={`${msg.persona_name}-${i}`} msg={msg} isTrackA={false} />
                 ))}
              </div>
            </div>

@@ -1,17 +1,16 @@
 import os
 import json
-import redis.asyncio as aioredis
-import random
 import asyncio
+import random
 from typing import List, Dict
 from engine.agent import generate_agent_response_async
 from graph.retriever import get_context_for_post
 from api.config import settings
 from api.logger import logger
+from api.redis_utils import redis_manager
 
 class OasisEngine:
     def __init__(self):
-        self.redis_url = settings.redis_full_url
         self.semaphore = None
         self.app_env = settings.APP_ENV
 
@@ -20,30 +19,36 @@ class OasisEngine:
         Orchestrates a multi-turn OASIS simulation in parallel with a semaphore limit.
         """
         if self.semaphore is None:
-            self.semaphore = asyncio.Semaphore(50)
+            # Load from settings or default to 50
+            limit = getattr(settings, "CONCURRENT_AGENT_LIMIT", 50)
+            self.semaphore = asyncio.Semaphore(limit)
 
-        redis_client = aioredis.from_url(self.redis_url, decode_responses=True)
+        redis_client = redis_manager.get_client()
         
         try:
-            # 1. Load grounded personas with distributed lock
+            # 1. Load grounded personas
             from engine.personas import load_personas_from_redis
             
-            # Use Redis distributed lock to coordinate persona generation across workers
+            # Using a distributed lock for persona generation/scaling
             async with redis_client.lock(f"lock:personas:{self.app_env}", timeout=60):
                 all_personas = await load_personas_from_redis(client_id=self.app_env)
                 
                 # Dynamic Swarm Scaling
                 if agent_count > len(all_personas):
                     logger.info(f"[{track_id}] Scaling swarm from {len(all_personas)} to {agent_count}...")
-                    await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
-                    await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id}))
+                    status_msg = json.dumps({"type": "status", "message": "Generating Personas...", "simulation_id": simulation_id})
+                    await redis_client.publish('sim_stream', status_msg)
+                    await redis_client.publish(f'sim_stream:{simulation_id}', status_msg)
+                    
                     from engine.personas import get_grounding_concepts, create_persona_llm
                     concepts = await get_grounding_concepts(client_id=self.app_env)
                     
                     needed = agent_count - len(all_personas)
-                    semaphore = asyncio.Semaphore(4)
+                    # Use a smaller semaphore for LLM persona generation to avoid rate limits
+                    gen_semaphore = asyncio.Semaphore(4)
+                    
                     async def sem_create(i):
-                        async with semaphore:
+                        async with gen_semaphore:
                             return await create_persona_llm(concepts, unique_id=i)
                     
                     tasks = [sem_create(i) for i in range(needed)]
@@ -69,12 +74,14 @@ class OasisEngine:
             
             simulation_history = []
             
-            await redis_client.publish('sim_stream', json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id}))
-            await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id}))
+            status_running = json.dumps({"type": "status", "message": "Running Swarm...", "simulation_id": simulation_id})
+            await redis_client.publish('sim_stream', status_running)
+            await redis_client.publish(f'sim_stream:{simulation_id}', status_running)
 
             for turn in range(1, turns + 1):
                 logger.info(f"[{track_id}] Starting Turn {turn} ({len(personas)} agents)...")
                 
+                # Shuffle personas for each turn
                 active_personas = random.sample(personas, len(personas))
                 
                 tasks = []
@@ -82,6 +89,7 @@ class OasisEngine:
                     reply_to = None
                     target_text = post_text
                     
+                    # 50% chance to reply to a previous comment if not first turn
                     if turn > 1 and simulation_history and random.random() > 0.5:
                         reply_to = random.choice(simulation_history)
                         target_text = f"User {reply_to['persona_name']} said: '{reply_to['comment']}' in response to the post: '{post_text}'"
@@ -92,8 +100,9 @@ class OasisEngine:
                 simulation_history.extend([r for r in turn_results if r])
                     
             return f"Finished OASIS Swarm for {simulation_id}:{track_id}"
-        finally:
-            await redis_client.aclose()
+        except Exception as e:
+            logger.error(f"Simulation failed for {simulation_id}:{track_id}: {e}", exc_info=True)
+            return f"Failed OASIS Swarm for {simulation_id}:{track_id}"
 
     async def _process_agent_turn(self, redis_client, persona, target_text, context, simulation_id, track_id, turn, reply_to, total_expected):
         async with self.semaphore:
@@ -111,9 +120,10 @@ class OasisEngine:
                     "total_expected": total_expected
                 }
                 
-                await redis_client.publish('sim_stream', json.dumps(message))
-                await redis_client.publish(f'sim_stream:{simulation_id}', json.dumps(message))
-                await redis_client.rpush(f"logs:{simulation_id}:{track_id}", json.dumps(message))
+                msg_json = json.dumps(message)
+                await redis_client.publish('sim_stream', msg_json)
+                await redis_client.publish(f'sim_stream:{simulation_id}', msg_json)
+                await redis_client.rpush(f"logs:{simulation_id}:{track_id}", msg_json)
                 return message
             except Exception as e:
                 logger.error(f"Error processing agent {persona['name']}: {e}")
@@ -121,4 +131,5 @@ class OasisEngine:
 
 if __name__ == "__main__":
     engine = OasisEngine()
-    asyncio.run(engine.run_simulation("TestTrack", "Async test!", "manual_test"))
+    # In a real script we would need to handle the redis connection lifecycle
+    # asyncio.run(engine.run_simulation("TestTrack", "Async test!", "manual_test"))

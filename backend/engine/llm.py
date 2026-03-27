@@ -1,12 +1,10 @@
 import os
 import time
-import redis.asyncio as aioredis
+import asyncio
 from litellm import completion, acompletion, token_counter
 from litellm.exceptions import RateLimitError
 from api.config import settings
-
-# Redis for Circuit Breaker
-r = aioredis.from_url(settings.redis_full_url, decode_responses=True)
+from api.redis_utils import redis_manager
 
 # Dual LLM Config
 STRATEGIC_LLM = settings.STRATEGIC_LLM_MODEL
@@ -18,6 +16,7 @@ async def is_circuit_broken(sim_id: str) -> bool:
     base_url = settings.LLM_BASE_URL or ""
     is_local = "localhost" in base_url or "host.docker.internal" in base_url or not base_url
     
+    r = redis_manager.get_client()
     limit = 1000000 
     usage = int(await r.get(f"tokens:{sim_id}") or 0)
     
@@ -37,6 +36,7 @@ async def generate_response(prompt: str, model: str, sim_id: str = "global") -> 
     if await is_circuit_broken(sim_id):
         return "CIRCUIT_BREAKER_TRIPPED"
 
+    r = redis_manager.get_client()
     for attempt in range(3):
         try:
             messages = [{"role": "user", "content": prompt}]

@@ -1,17 +1,22 @@
 import os
 import json
 import asyncio
-from engine.llm import STRATEGIC_LLM, LLM_BASE_URL, r
+from engine.llm import STRATEGIC_LLM, LLM_BASE_URL
 from typing import List, Dict
 from litellm import completion, acompletion
 from litellm.exceptions import RateLimitError
 from api.config import settings
 from api.logger import logger
+from api.redis_utils import redis_manager
 
 class ReportAgent:
     def __init__(self):
-        self.redis_client = r
+        self._redis_client = None
         self.app_env = settings.APP_ENV
+
+    @property
+    def redis_client(self):
+        return redis_manager.get_client()
 
     async def generate_report(self, track_id: str, simulation_data: List[Dict]) -> Dict:
         """

@@ -1,10 +1,11 @@
-from engine.llm import STRATEGIC_LLM, AGENT_LLM, LLM_BASE_URL, is_circuit_broken, r
+from engine.llm import STRATEGIC_LLM, AGENT_LLM, LLM_BASE_URL, is_circuit_broken
 import os
 import time
 import asyncio
 from litellm import completion, acompletion, token_counter
 from api.config import settings
 from api.logger import logger
+from api.redis_utils import redis_manager
 
 # Optional Zep Integration
 try:
@@ -122,6 +123,7 @@ async def generate_agent_response_async(
         try:
             # Count Tokens (using AGENT_LLM)
             tokens = token_counter(model="gpt-4o-mini", messages=messages)
+            r = redis_manager.get_client()
             await r.incrby(f"tokens:{sim_id}", tokens)
 
             completion_args = {

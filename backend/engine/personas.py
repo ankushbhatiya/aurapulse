@@ -3,28 +3,22 @@ import uuid
 import random
 import os
 import asyncio
-import redis.asyncio as aioredis
 from typing import List, Dict
-from neo4j import GraphDatabase
 from litellm import completion, acompletion
 from api.config import settings
 from api.logger import logger
+from graph.neo4j_utils import neo4j_connector
+from api.redis_utils import redis_manager
 
-async def get_grounding_concepts(client_id="CLIENT_A") -> List[str]:
+async def get_grounding_concepts(client_id: str = "CLIENT_A") -> List[str]:
     try:
-        driver = GraphDatabase.driver(
-            settings.NEO4J_URI, 
-            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD) if settings.NEO4J_PASSWORD else None
-        )
-        # neo4j driver doesn't support async naturally in this version without extra steps, 
-        # keep sync for now as it's ingestion time, or use session.execute_read for better practice
+        driver = neo4j_connector.get_driver()
         with driver.session() as session:
             result = session.run(
                 "MATCH (n) WHERE n.tenant_id = $client_id AND NOT n:Celebrity RETURN n.name as name LIMIT 20",
                 client_id=client_id
             )
             concepts = [r["name"] for r in result]
-        driver.close()
         return concepts if concepts else ["General Social Media", "Trending Topics"]
     except Exception as e:
         logger.error(f"Failed to fetch grounding concepts: {e}")
@@ -60,7 +54,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.85, # Increased for more variety
+            "temperature": 0.85,
             "max_tokens": 500
         }
         if settings.LLM_BASE_URL:
@@ -89,7 +83,6 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
         return data
     except Exception as e:
         logger.error(f"LLM Persona Generation Error: {e}. Falling back to random.")
-        # Fallback to random if LLM fails
         return {
             "id": str(uuid.uuid4()),
             "name": f"User_{random.randint(1000, 9999)}",
@@ -102,7 +95,7 @@ async def create_persona_llm(concepts: List[str], unique_id: int = 0) -> Dict:
 
 async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     concepts = await get_grounding_concepts(client_id)
-    logger.info(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel (limit=4)...")
+    logger.info(f"Generating {count} high-fidelity personas using {settings.STRATEGIC_LLM_MODEL} in parallel...")
     
     semaphore = asyncio.Semaphore(4)
 
@@ -113,7 +106,6 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
     tasks = [sem_create(i) for i in range(count)]
     raw_personas = await asyncio.gather(*tasks)
     
-    # Ensure name uniqueness
     unique_personas = []
     seen_names = set()
     for p in raw_personas:
@@ -121,29 +113,39 @@ async def generate_grounded_personas(count=100, client_id="CLIENT_A"):
             unique_personas.append(p)
             seen_names.add(p["name"])
         else:
-            # Append a random string if duplicate name
             p["name"] = f"{p['name']} ({uuid.uuid4().hex[:4]})"
             unique_personas.append(p)
 
-    # Save to Redis for distributed access
-    redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
-    await redis_client.set(f"personas:{client_id}", json.dumps(unique_personas))
-    await redis_client.aclose()
-    
-    # Also save to file for legacy/backup compatibility if needed
-    file_path = settings.PERSONAS_FILE
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "w") as f:
-        json.dump(unique_personas, f, indent=2)
+    # Save to Redis
+    redis_client = redis_manager.get_client()
+    key = f"personas:{client_id}"
+    # Clear existing and add new
+    await redis_client.delete(key)
+    if unique_personas:
+        # Use SADD for uniqueness and efficiency if we just need the set
+        # But we need the full objects, so we'll use a Hash or keep as a list for now
+        # Actually, for random sample, a list is fine, but let's store them as individual items in a list or set
+        await redis_client.set(key, json.dumps(unique_personas))
         
-    logger.info(f"Ingestion complete. {len(unique_personas)} personas saved to Redis key 'personas:{client_id}' and {file_path}")
+    # Also save to file
+    file_path = settings.PERSONAS_FILE
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            json.dump(unique_personas, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to save personas to file: {e}")
+        
+    logger.info(f"Ingestion complete. {len(unique_personas)} personas saved to Redis key '{key}'")
 
 async def load_personas_from_redis(client_id="CLIENT_A") -> List[Dict]:
-    redis_client = aioredis.from_url(settings.redis_full_url, decode_responses=True)
-    data = await redis_client.get(f"personas:{client_id}")
-    await redis_client.aclose()
-    if data:
-        return json.loads(data)
+    try:
+        redis_client = redis_manager.get_client()
+        data = await redis_client.get(f"personas:{client_id}")
+        if data:
+            return json.loads(data)
+    except Exception as e:
+        logger.error(f"Error loading personas from Redis: {e}")
     return []
 
 if __name__ == "__main__":
